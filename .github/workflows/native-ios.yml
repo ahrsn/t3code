@@ -66,6 +66,7 @@ jobs:
       - name: Preview UI flow
         working-directory: apps/ios-native
         run: |
+          xcrun simctl ui "$NATIVE_SIMULATOR_ID" appearance dark
           xcodebuild -project T3Native.xcodeproj -scheme T3NativeUI \
             -destination "platform=iOS Simulator,id=$NATIVE_SIMULATOR_ID" \
             -derivedDataPath build/DerivedData -resultBundlePath build/ui.xcresult \
