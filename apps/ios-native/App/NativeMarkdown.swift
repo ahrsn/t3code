@@ -125,6 +125,7 @@ struct CodeBlock: View {
             ScrollView(maximumTextHeight == nil ? [.horizontal] : [.horizontal, .vertical]) {
                 Text(code).font(.custom("Menlo-Regular", fixedSize: pointSize)).textSelection(.enabled).fixedSize(horizontal: true, vertical: false)
             }
+            .defaultScrollAnchor(.topLeading, for: .alignment)
             .frame(height: maximumTextHeight.map { maximum in
                 min(maximum, Double(code.utf8.reduce(1) { $1 == 10 ? $0 + 1 : $0 }) * pointSize * 1.35)
             })

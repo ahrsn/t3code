@@ -346,6 +346,9 @@ import XCTest
         tool("Inspect build result").tap()
         tool("Run native checks").tap()
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "All native checks passed")).firstMatch.waitForExistence(timeout: 10))
+        let output = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "All native checks passed")).firstMatch
+        let outputLabel = app.staticTexts.matching(NSPredicate(format: "label == %@", "Output")).firstMatch
+        XCTAssertLessThan(abs(output.frame.minX - outputLabel.frame.minX), 3, "Command output must align with its heading.")
         XCTAssertTrue(app.staticTexts["Exit 0"].exists)
         app.buttons.matching(identifier: "Copy").element(boundBy: 1).tap()
         XCTAssertTrue(app.buttons["Copied"].firstMatch.waitForExistence(timeout: 5))
@@ -364,6 +367,8 @@ import XCTest
         for _ in 0..<4 { if limit.isHittable { break }; outerScrollUp() }
         XCTAssertTrue(limit.isHittable)
         capture("69-native-bounded-tool-output-preview", app: app)
+        outerScrollUp()
+        capture("73-native-tool-shortened-warning-preview", app: app)
         tool("Read a long result").tap()
         tool("Removed output").tap()
         XCTAssertTrue(app.staticTexts["Output is no longer available."].waitForExistence(timeout: 10))
