@@ -67,9 +67,11 @@ struct AttachmentSendAttempt: Codable, Equatable, Sendable {
 actor AttachmentDraftStore {
     static let shared = AttachmentDraftStore()
     private let root: URL
+    private var removedHosts: Set<UUID> = []
     private struct Manifest: Codable {
         var items: [DraftAttachment] = []
         var attempt: AttachmentSendAttempt?
+        var hostID: UUID?
     }
     init(root: URL? = nil) {
         self.root = root ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -78,6 +80,15 @@ actor AttachmentDraftStore {
     private func directory(_ key: String) -> URL {
         let hash = SHA256.hash(data: Data(key.utf8)).map { String(format: "%02x", $0) }.joined()
         return root.appendingPathComponent(hash, isDirectory: true)
+    }
+    private func hostID(_ key: String) -> UUID? {
+        guard key.hasPrefix("draft."), key.hasSuffix(".attachments") else { return nil }
+        let part = key.dropFirst(6)
+        guard part.count > 36, part.dropFirst(36).first == "." else { return nil }
+        return UUID(uuidString: String(part.prefix(36)))
+    }
+    private func checkAvailable(_ key: String) throws {
+        if let id = hostID(key), removedHosts.contains(id) { throw ClientError("This server was removed. Choose a connected server before attaching files.") }
     }
     private func file(_ item: DraftAttachment, key: String) throws -> URL {
         guard UUID(uuidString: item.id) != nil else { throw ClientError("The saved attachment is invalid. Remove it and attach the file again.") }
@@ -88,9 +99,18 @@ actor AttachmentDraftStore {
         guard FileManager.default.fileExists(atPath: path.path) else { return Manifest() }
         let data = try Data(contentsOf: path)
         guard data.count <= 256 * 1024 else { throw ClientError("The saved attachment draft is invalid.") }
-        return try JSONDecoder().decode(Manifest.self, from: data)
+        var manifest = try JSONDecoder().decode(Manifest.self, from: data)
+        // Earlier drafts did not record ownership. Attribute them only when their
+        // original key is known, never by guessing from another server's files.
+        if manifest.hostID == nil, let id = hostID(key) {
+            manifest.hostID = id
+            try write(manifest, key: key)
+        }
+        return manifest
     }
     private func write(_ manifest: Manifest, key: String) throws {
+        try checkAvailable(key)
+        var manifest = manifest; manifest.hostID = hostID(key)
         let dir = directory(key)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: [.protectionKey: FileProtectionType.complete])
         var values = URLResourceValues(); values.isExcludedFromBackup = true
@@ -113,6 +133,7 @@ actor AttachmentDraftStore {
     }
     private func copyFile(_ source: URL, key: String, limits: AttachmentLimits) throws -> [DraftAttachment] {
         try Task.checkCancellation()
+        try checkAvailable(key)
         let info = try source.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey, .contentTypeKey])
         guard info.isRegularFile == true, info.isSymbolicLink != true else { throw ClientError("Choose a regular file.") }
         let mime = info.contentType?.preferredMIMEType ?? UTType(filenameExtension: source.pathExtension)?.preferredMIMEType ?? "application/octet-stream"
@@ -175,6 +196,38 @@ actor AttachmentDraftStore {
             if FileManager.default.fileExists(atPath: url.path) { try FileManager.default.removeItem(at: url) }
         }
         return manifest.items
+    }
+
+    /// Unlinks regular UUID-named files and our manifest, then only an empty directory.
+    /// Unassigned legacy drafts and unrecognized files are preserved.
+    func discard(hostID: UUID) throws -> Int {
+        removedHosts.insert(hostID)
+        do {
+            guard FileManager.default.fileExists(atPath: root.path) else { return 0 }
+            let directories = try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+            var unassigned = 0
+            for directory in directories {
+                let kind = try directory.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+                guard directory.lastPathComponent.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil,
+                      kind.isDirectory == true, kind.isSymbolicLink != true else { continue }
+                let path = directory.appendingPathComponent("draft.json")
+                guard FileManager.default.fileExists(atPath: path.path) else { continue }
+                let info = try path.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey])
+                guard info.isRegularFile == true, info.isSymbolicLink != true, (info.fileSize ?? .max) <= 256 * 1024 else { continue }
+                // A malformed or unassigned manifest cannot authorize a deletion.
+                guard let manifest = try? JSONDecoder().decode(Manifest.self, from: Data(contentsOf: path)) else { unassigned += 1; continue }
+                if manifest.hostID == nil { unassigned += manifest.items.count; continue }
+                guard manifest.hostID == hostID else { continue }
+                for file in try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey]) {
+                    guard UUID(uuidString: file.lastPathComponent) != nil else { continue }
+                    let info = try file.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+                    if info.isRegularFile == true, info.isSymbolicLink != true { try FileManager.default.removeItem(at: file) }
+                }
+                try FileManager.default.removeItem(at: path)
+                if try FileManager.default.contentsOfDirectory(atPath: directory.path).isEmpty { try FileManager.default.removeItem(at: directory) }
+            }
+            return unassigned
+        } catch { removedHosts.remove(hostID); throw error }
     }
 }
 

@@ -9,6 +9,8 @@ struct ConnectionsScreen: View {
     @State private var code = ""
     @State private var removing: SavedHost?
     @State private var pairingError: String?
+    @State private var removalError: String?
+    @State private var removalNotice: String?
 
     var body: some View {
         NavigationStack {
@@ -28,8 +30,15 @@ struct ConnectionsScreen: View {
                                     if store.activeHostID == host.id { Image(systemName: "checkmark").accessibilityLabel("Selected") }
                                 }
                             }
+                            .accessibilityValue(store.activeHostID == host.id ? "Selected" : "")
                             .swipeActions { Button("Remove", role: .destructive) { removing = host } }
                         }
+                    }
+                }
+                if removalError != nil || removalNotice != nil {
+                    Section {
+                        if let removalError { Text(removalError).foregroundStyle(.red) }
+                        if let removalNotice { Text(removalNotice).foregroundStyle(.secondary) }
                     }
                 }
                 Section {
@@ -52,11 +61,21 @@ struct ConnectionsScreen: View {
                     Text("In T3 Code on your computer, open Connections and create a pairing link. Direct LAN, Tailscale, and HTTPS server links are supported. T3 Connect account discovery is not available yet.")
                 }
             }
+            .disabled(store.removingHostID != nil)
             .navigationTitle("Connections").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.disabled(store.removingHostID != nil) } }
+            .interactiveDismissDisabled(store.removingHostID != nil)
             .task { link = initialLink }
-            .confirmationDialog("Remove this server and its saved credential?", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }), titleVisibility: .visible) {
-                Button("Remove server", role: .destructive) { if let host = removing { store.removeHost(host) }; removing = nil }
+            .confirmationDialog("Remove this server, its credential, and unsent drafts?", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }), titleVisibility: .visible) {
+                Button("Remove server", role: .destructive) {
+                    guard let host = removing else { return }
+                    removing = nil; removalError = nil; removalNotice = nil
+                    Task {
+                        do {
+                            if try await store.removeHost(host) > 0 { removalNotice = "Older attachment drafts without server information were kept on this device." }
+                        } catch { removalError = "Could not clear this server's attachment drafts. The server is still saved." }
+                    }
+                }
             }
         }
     }

@@ -35,7 +35,9 @@ The app exchanges the pairing token for a scoped access token, stores that token
 
 Loading an earlier page prepares its completed Markdown before insertion, then restores the visible message and its offset. Failed history requests keep the current conversation open and offer a local retry.
 
-The app disconnects in the background and reloads authoritative snapshots on foreground reconnect. Drafts stay on this device. A timed-out send is never retried automatically because it may already have reached the server.
+The app disconnects in the background and reloads authoritative snapshots on foreground reconnect. Disconnecting cancels an active attachment transfer and retains its draft, while a dispatched message remains subject to normal acknowledgement handling. A timed-out send is never retried automatically because it may already have reached the server.
+
+Removing a server clears its credential, saved text/model drafts, and owned attachment copies. Other servers' data stays intact. Cleanup failure keeps the server saved for retry. Older attachment manifests without server ownership are migrated when their original conversation opens; if still unassigned during removal, their files are retained and a notice is shown. Cleanup unlinks only owned regular files and empty directories.
 
 ## Upstream maintenance
 

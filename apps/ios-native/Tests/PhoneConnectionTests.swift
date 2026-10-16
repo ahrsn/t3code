@@ -142,7 +142,7 @@ import Observation
         let selected = ModelCatalog(config: store.config, projectID: project.id).selection(instanceID: provider["instanceId"].string, modelID: model["slug"].string, options: [:])
         let thread = try await store.createThread(project: project, title: "Native attachment send verification", model: selected)
         await store.selectThread(thread); try await waitForDetail(store, id: thread)
-        let key = "isolated-attachment-send." + UUID().uuidString
+        let key = "draft.\(host.id.uuidString).\(thread).attachments"
         let source = try AttachmentDraftFixtures.file(image: false), image = try AttachmentDraftFixtures.file(image: true)
         let limits = AttachmentLimits(config: store.config)
         _ = try await AttachmentDraftStore.shared.importFile(source.url, key: key, limits: limits)

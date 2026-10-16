@@ -80,7 +80,10 @@ jobs:
             -only-testing:T3NativeUITests/NativeFlowTests/testLongMessageHistoryAnchorWithPreviewData \
             -only-testing:T3NativeUITests/NativeFlowTests/testHistoryRetryAndFinalPageWithPreviewData \
             -only-testing:T3NativeUITests/NativeFlowTests/testNativeAttachmentPreviewWithPreviewData \
-            -only-testing:T3NativeUITests/NativeFlowTests/testAttachmentDraftRestoresAndUsesNativeFilesPickerWithPreviewData test
+            -only-testing:T3NativeUITests/NativeFlowTests/testAttachmentDraftRestoresAndUsesNativeFilesPickerWithPreviewData \
+            -only-testing:T3NativeUITests/NativeFlowTests/testRemovingOneServerPreservesTheOtherWithPreviewData \
+            -only-testing:T3NativeUITests/NativeFlowTests/testUnassignedLegacyDraftsRemainVisibleAfterServerRemovalWithPreviewData \
+            -only-testing:T3NativeUITests/NativeFlowTests/testFailedDraftCleanupKeepsServerAvailableWithPreviewData test
       - uses: actions/upload-artifact@v4
         if: always()
         with:

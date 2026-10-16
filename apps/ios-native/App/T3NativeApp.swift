@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main struct T3NativeApp: App {
-    @State private var store = AppStore()
+    @State private var store = AppStore.forLaunch()
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("appearance") private var appearance = "system"
     @AppStorage("theme") private var themeID = "t3-code"

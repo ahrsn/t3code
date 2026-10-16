@@ -43,6 +43,7 @@ struct ComposerSendConfirmation: Equatable {
     var sending = false
     var composerSendTask: Task<Void, Never>?
     var lastConfirmedSend: ComposerSendConfirmation?
+    var removingHostID: UUID?
     var uploadingName: String?
     var uploadDraftKey: String?
     var uploadFraction = 0.0
@@ -52,6 +53,8 @@ struct ComposerSendConfirmation: Equatable {
     @ObservationIgnored var demoAttachmentAttempts: Set<String> = []
     #endif
     @ObservationIgnored private let authenticator = HostAuthenticator()
+    @ObservationIgnored let attachmentDraftStore: AttachmentDraftStore
+    @ObservationIgnored private let preferences: UserDefaults
     @ObservationIgnored private var transport = RPCTransport()
     @ObservationIgnored private var connectionTask: Task<Void, Never>?
     @ObservationIgnored private var detailSubscription: String?
@@ -60,14 +63,15 @@ struct ComposerSendConfirmation: Equatable {
     @ObservationIgnored private var detailBuffer: [JSONValue] = []
     @ObservationIgnored private var flushTask: Task<Void, Never>?
 
-    init() {
-        if let data = UserDefaults.standard.data(forKey: "hosts"), let saved = try? JSONDecoder().decode([SavedHost].self, from: data) { hosts = saved }
-        if let id = UserDefaults.standard.string(forKey: "activeHost") { activeHostID = UUID(uuidString: id) }
+    init(attachmentDraftStore: AttachmentDraftStore = .shared, preferences: UserDefaults = .standard) {
+        self.attachmentDraftStore = attachmentDraftStore; self.preferences = preferences
+        if let data = preferences.data(forKey: "hosts"), let saved = try? JSONDecoder().decode([SavedHost].self, from: data) { hosts = saved }
+        if let id = preferences.string(forKey: "activeHost") { activeHostID = UUID(uuidString: id) }
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--demo") {
             if ProcessInfo.processInfo.arguments.contains("--reset-demo-draft") {
-                UserDefaults.standard.removeObject(forKey: "draft.\(activeHostID?.uuidString ?? "none").t0")
-                UserDefaults.standard.removeObject(forKey: "draft.\(activeHostID?.uuidString ?? "none").t0.model")
+                preferences.removeObject(forKey: "draft.\(activeHostID?.uuidString ?? "none").t0")
+                preferences.removeObject(forKey: "draft.\(activeHostID?.uuidString ?? "none").t0.model")
             }
             loadDemo()
         }
@@ -94,10 +98,11 @@ struct ComposerSendConfirmation: Equatable {
     }
 
     func connect(_ host: SavedHost) {
+        guard removingHostID != host.id else { return }
         let openThreadID = activeHostID == host.id ? conversation?.id : nil
         disconnect()
         isDemo = false; activeHostID = host.id
-        UserDefaults.standard.set(host.id.uuidString, forKey: "activeHost")
+        preferences.set(host.id.uuidString, forKey: "activeHost")
         shell = ShellProjection(); config = .null
         conversation = openThreadID.map { Conversation(id: $0) }
         let generation = UUID(); connectionGeneration = generation
@@ -148,19 +153,29 @@ struct ComposerSendConfirmation: Equatable {
         if shell.hasSnapshot { connected = true; phase = "Connected"; error = nil }
     }
     func disconnect() {
+        // Once dispatch starts, its acknowledgement can be uncertain. Only the
+        // upload/preparation phase is cancelled by a connection transition.
+        if uploadingName != nil { composerSendTask?.cancel() }
         connectionGeneration = UUID(); selectionGeneration = UUID()
         connectionTask?.cancel(); connectionTask = nil
         let rpc = transport; Task { await rpc.close() }
         flushTask?.cancel(); flushTask = nil; detailBuffer.removeAll()
         detailSubscription = nil; connected = false; phase = "Disconnected"
     }
-    func resume() { if !isDemo, let host = activeHost, connectionTask == nil { connect(host) } }
+    func resume() { if !isDemo, let host = activeHost, removingHostID != host.id, connectionTask == nil { connect(host) } }
     func retry() { if let host = activeHost { connect(host) } }
-    func removeHost(_ host: SavedHost) {
+    func removeHost(_ host: SavedHost) async throws -> Int {
+        guard removingHostID == nil else { throw ClientError("A server is already being removed.") }
+        removingHostID = host.id; defer { removingHostID = nil }
+        if activeHostID == host.id { disconnect() }
+        let unassigned = try await attachmentDraftStore.discard(hostID: host.id)
         if activeHostID == host.id { disconnect(); activeHostID = nil; conversation = nil; shell = ShellProjection() }
+        if preferences.string(forKey: "activeHost") == host.id.uuidString { preferences.removeObject(forKey: "activeHost") }
+        for key in preferences.dictionaryRepresentation().keys where key.hasPrefix("draft.\(host.id.uuidString).") { preferences.removeObject(forKey: key) }
         CredentialVault.remove(host.id); hosts.removeAll { $0.id == host.id }; persistHosts()
+        return unassigned
     }
-    private func persistHosts() { UserDefaults.standard.set(try? JSONEncoder().encode(hosts), forKey: "hosts") }
+    private func persistHosts() { preferences.set(try? JSONEncoder().encode(hosts), forKey: "hosts") }
 
     func selectThread(_ id: String) async {
         #if DEBUG
@@ -226,12 +241,12 @@ struct ComposerSendConfirmation: Equatable {
             if !attachments.isEmpty {
                 guard let draftKey else { throw ClientError("The attachment draft could not be loaded.") }
                 // Read saved upload IDs, including those retained by an earlier failed send.
-                let current = try await AttachmentDraftStore.shared.items(key: draftKey)
+                let current = try await attachmentDraftStore.items(key: draftKey)
                 let ids = Set(attachments.map(\.id))
                 let selected = current.filter { ids.contains($0.id) }
                 guard selected.map(\.id) == attachments.map(\.id) else { throw ClientError("The attachments changed. Review the draft before sending.") }
                 try AttachmentLimits(config: config).validate(selected)
-                attempt = try await AttachmentDraftStore.shared.attempt(key: draftKey, text: text, model: model, attachments: selected)
+                attempt = try await attachmentDraftStore.attempt(key: draftKey, text: text, model: model, attachments: selected)
                 for item in selected {
                     try Task.checkCancellation()
                     guard connectionGeneration == generation, activeHostID == host.id, canOperate else { throw ClientError("The connection changed. Your attachments are saved.") }
@@ -244,7 +259,7 @@ struct ComposerSendConfirmation: Equatable {
                             guard let failure = error as? RPCFailure, failure.contains(tag: "AssetAttachmentNotFoundError") else { throw error }
                         }
                     }
-                    let file = try await AttachmentDraftStore.shared.uploadFile(item, key: draftKey)
+                    let file = try await attachmentDraftStore.uploadFile(item, key: draftKey)
                     var metadata = item.reference(id: "").object; metadata.removeValue(forKey: "id")
                     let minted = try await rpc.call("attachments.createUploadUrl", payload: .object(metadata))
                     let uploadID = minted["attachmentId"].string
@@ -257,7 +272,7 @@ struct ComposerSendConfirmation: Equatable {
                             self.uploadFraction = progress
                         }
                     }
-                    try await AttachmentDraftStore.shared.markUploaded(item, uploadID: uploadID, key: draftKey)
+                    try await attachmentDraftStore.markUploaded(item, uploadID: uploadID, key: draftKey)
                     references.append(item.reference(id: uploadID))
                 }
             } else { attempt = nil }
@@ -276,7 +291,7 @@ struct ComposerSendConfirmation: Equatable {
             if let attempt { fields["messageId"] = .string(attempt.messageID) }
             _ = try await rpc.call("orchestration.dispatchCommand", payload: .object(fields))
             if let draftKey, let attempt {
-                do { _ = try await AttachmentDraftStore.shared.remove(ids: Set(attachments.map(\.id)), key: draftKey, confirmedAttempt: attempt.commandID) }
+                do { _ = try await attachmentDraftStore.remove(ids: Set(attachments.map(\.id)), key: draftKey, confirmedAttempt: attempt.commandID) }
                 catch { self.error = "Message sent, but the saved attachment copies could not be cleared: " + error.localizedDescription }
             }
             if let draftKey { lastConfirmedSend = ComposerSendConfirmation(draftKey: draftKey, text: text) }

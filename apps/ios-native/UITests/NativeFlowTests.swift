@@ -201,6 +201,53 @@ import XCTest
         XCTAssertTrue(app.staticTexts["Connected"].waitForExistence(timeout: 25))
         capture("06-real-host-connected", app: app)
     }
+    func testRemovingOneServerPreservesTheOtherWithPreviewData() {
+        let app = XCUIApplication(); app.launchArguments = ["--demo", "--host-removal-preview"]; app.launch()
+        let status = app.buttons["connection-status"]
+        expectation(for: NSPredicate(format: "value == %@", "Preview data"), evaluatedWith: status)
+        waitForExpectations(timeout: 10)
+        app.buttons["Connections"].tap()
+        let alpha = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Alpha server")).firstMatch
+        let beta = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Beta server")).firstMatch
+        XCTAssertTrue(alpha.waitForExistence(timeout: 5)); XCTAssertTrue(beta.exists)
+        capture("40-two-server-removal-fixture-preview", app: app)
+        alpha.swipeLeft(); app.buttons["Remove"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["Remove server"].waitForExistence(timeout: 5))
+        capture("41-server-draft-removal-confirmation-preview", app: app)
+        app.staticTexts["Add a server"].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        XCTAssertFalse(app.buttons["Remove server"].exists)
+        XCTAssertTrue(alpha.exists); XCTAssertTrue(beta.exists)
+        alpha.swipeLeft(); app.buttons["Remove"].firstMatch.tap()
+        app.buttons["Remove server"].tap()
+        expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: alpha)
+        waitForExpectations(timeout: 5)
+        XCTAssertTrue(beta.exists)
+        XCTAssertEqual(beta.value as? String, "Selected")
+        capture("42-other-server-preserved-preview", app: app)
+    }
+    func testUnassignedLegacyDraftsRemainVisibleAfterServerRemovalWithPreviewData() {
+        let app = XCUIApplication(); app.launchArguments = ["--demo", "--host-removal-preview", "--legacy-removal-preview"]; app.launch()
+        expectation(for: NSPredicate(format: "value == %@", "Preview data"), evaluatedWith: app.buttons["connection-status"])
+        waitForExpectations(timeout: 10)
+        app.buttons["Connections"].tap()
+        let alpha = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Alpha server")).firstMatch
+        XCTAssertTrue(alpha.waitForExistence(timeout: 5)); alpha.swipeLeft(); app.buttons["Remove"].firstMatch.tap()
+        app.buttons["Remove server"].tap()
+        XCTAssertTrue(app.staticTexts["Older attachment drafts without server information were kept on this device."].waitForExistence(timeout: 5))
+        capture("43-unassigned-drafts-preserved-preview", app: app)
+    }
+    func testFailedDraftCleanupKeepsServerAvailableWithPreviewData() {
+        let app = XCUIApplication(); app.launchArguments = ["--demo", "--host-removal-preview", "--failed-removal-preview"]; app.launch()
+        expectation(for: NSPredicate(format: "value == %@", "Preview data"), evaluatedWith: app.buttons["connection-status"])
+        waitForExpectations(timeout: 10)
+        app.buttons["Connections"].tap()
+        let alpha = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Alpha server")).firstMatch
+        XCTAssertTrue(alpha.waitForExistence(timeout: 5)); alpha.swipeLeft(); app.buttons["Remove"].firstMatch.tap()
+        app.buttons["Remove server"].tap()
+        XCTAssertTrue(app.staticTexts["Could not clear this server's attachment drafts. The server is still saved."].waitForExistence(timeout: 5))
+        XCTAssertTrue(alpha.exists)
+        capture("44-cleanup-failure-keeps-server-preview", app: app)
+    }
     func testAttachmentDraftRestoresAndUsesNativeFilesPickerWithPreviewData() {
         let app = XCUIApplication()
         app.launchArguments = ["--demo", "--attachment-draft-demo", "--reset-demo-draft", "--reset-demo-attachments"]
