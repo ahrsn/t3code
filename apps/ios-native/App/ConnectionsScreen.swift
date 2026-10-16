@@ -90,6 +90,12 @@ struct AppearanceScreen: View {
     @AppStorage("compactRows") private var compactRows = false
     @AppStorage("showReasoning") private var showReasoning = false
 
+    private var versionLabel: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Unknown"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "Unknown"
+        return "\(version) (\(build))"
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -109,7 +115,7 @@ struct AppearanceScreen: View {
                     Toggle("Show reasoning", isOn: $showReasoning)
                 }
                 Section {
-                    LabeledContent("Version", value: "0.1.0 (1)")
+                    LabeledContent("Version", value: versionLabel)
                     Link("Source and upstream", destination: URL(string: "https://github.com/ahrsn/t3code/tree/feat/native-ios-client/apps/ios-native")!)
                 }
             }
