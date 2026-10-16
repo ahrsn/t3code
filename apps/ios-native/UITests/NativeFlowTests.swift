@@ -158,6 +158,37 @@ import XCTest
         capture("23-history-jump-latest-preview", app: app)
     }
 
+    func testNativeAttachmentPreviewWithPreviewData() {
+        let app = XCUIApplication(); app.launchArguments = ["--demo", "--attachments-demo", "--reset-demo-draft"]; app.launch()
+        app.staticTexts["Build a native iOS client"].tap()
+        let pdf = app.buttons["Open Notes.pdf"]
+        XCTAssertTrue(pdf.waitForExistence(timeout: 5))
+        capture("25-attachment-list-preview", app: app)
+        pdf.tap()
+        XCTAssertTrue(app.buttons["Done"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Native attachment preview")).firstMatch.waitForExistence(timeout: 10))
+        capture("26-native-pdf-preview", app: app)
+        app.buttons["Done"].tap()
+        XCTAssertTrue(pdf.waitForExistence(timeout: 5))
+        app.buttons["Open Layout.png"].tap()
+        XCTAssertTrue(app.buttons["Done"].waitForExistence(timeout: 5))
+        capture("27-native-image-preview", app: app)
+        app.buttons["Done"].tap()
+        app.buttons["Open Connection.txt"].tap()
+        XCTAssertTrue(app.buttons["Retry"].waitForExistence(timeout: 5))
+        capture("28-attachment-retry-preview", app: app)
+        app.buttons["Retry"].tap()
+        XCTAssertTrue(app.buttons["Done"].waitForExistence(timeout: 5))
+        capture("29-native-text-preview", app: app)
+        app.buttons["Done"].tap()
+        XCTAssertTrue(pdf.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Open Future attachment"].isEnabled)
+        app.buttons["Open Layout.png"].tap()
+        XCTAssertTrue(app.buttons["Share"].firstMatch.waitForExistence(timeout: 5))
+        app.buttons["Share"].firstMatch.tap()
+        capture("30-native-share-preview", app: app)
+    }
+
     func testPairWithRealHostWhenProvided() throws {
         let link = ProcessInfo.processInfo.environment["T3_NATIVE_PAIRING_URL"] ?? ProcessInfo.processInfo.environment["TEST_RUNNER_T3_NATIVE_PAIRING_URL"] ?? ""
         guard !link.isEmpty else { throw XCTSkip("Set TEST_RUNNER_T3_NATIVE_PAIRING_URL for a scoped test host.") }

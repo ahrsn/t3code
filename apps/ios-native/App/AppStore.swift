@@ -37,6 +37,9 @@ import Observation
     var sending = false
     var conversation: Conversation?
     var pendingActions: Set<String> = []
+    #if DEBUG
+    @ObservationIgnored var demoAttachmentAttempts: Set<String> = []
+    #endif
     @ObservationIgnored private let authenticator = HostAuthenticator()
     @ObservationIgnored private var transport = RPCTransport()
     @ObservationIgnored private var connectionTask: Task<Void, Never>?
@@ -225,6 +228,18 @@ import Observation
             try await dispatch(["type": .string("run.interrupt"), "threadId": .string(threadID), "runId": run["id"], "holdQueue": .bool(true)])
         }
         catch { self.error = error.localizedDescription }
+    }
+    func previewAttachment(_ attachment: AttachmentReference, hostID: UUID?) async throws -> AttachmentPreviewFile {
+        #if DEBUG
+        if isDemo { return try AttachmentFixtures.preview(attachment, attempts: &demoAttachmentAttempts) }
+        #endif
+        guard let host = activeHost, host.id == hostID, connected else { throw ClientError("Reconnect to this server before opening the attachment.") }
+        let result = try await transport.call("assets.createUrl", payload: .object(["resource": attachment.resource]))
+        guard activeHostID == hostID else { throw CancellationError() }
+        let url = try AttachmentDownloads.assetURL(relative: result["relativeUrl"].string, origin: host.origin)
+        let file = try await AttachmentDownloads().download(url: url, attachment: attachment)
+        guard activeHostID == hostID else { throw CancellationError() }
+        return file
     }
     func loadHistory(expectedID: String? = nil, beforeApplying: () -> Void = {}) async -> Bool {
         if let expectedID, conversation?.id != expectedID { return false }

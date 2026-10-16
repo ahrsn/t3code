@@ -9,6 +9,7 @@ struct ConversationScreen: View {
     @State private var showModelSettings = false
     @State private var draftModel: JSONValue?
     @State private var viewport = TimelineViewport()
+    @State private var previewRequest: AttachmentPreviewRequest?
     @FocusState private var focused: Bool
     @AppStorage("showReasoning") private var showReasoning = false
     @AppStorage("compactRows") private var compactRows = false
@@ -53,6 +54,10 @@ struct ConversationScreen: View {
             ModelSettingsScreen(store: store, projectID: thread["projectId"].string, current: selectedModel) { draftModel = $0 }
                 .environment(\.t3Theme, theme)
         }
+        .sheet(item: $previewRequest) { request in
+            AttachmentPreviewScreen(request: request, store: store).environment(\.t3Theme, theme)
+        }
+        .onChange(of: store.activeHostID) { _, _ in previewRequest = nil }
         .task(id: threadID) {
             draft = UserDefaults.standard.string(forKey: draftKey) ?? ""
             draftModel = UserDefaults.standard.data(forKey: draftKey + ".model").flatMap { try? JSONValue.decode($0) }
@@ -100,7 +105,9 @@ struct ConversationScreen: View {
                                     RequestRow(row: row, request: request, store: store, threadID: threadID)
                                 }
                             } else {
-                                TimelineRowView(row: row, pointSize: messageSize).equatable()
+                                TimelineRowView(row: row, pointSize: messageSize) { attachment in
+                                    previewRequest = AttachmentPreviewRequest(attachment: attachment, hostID: store.activeHostID)
+                                }.equatable()
                             }
                         }
                         .id(row.id)
@@ -199,6 +206,7 @@ struct ConversationScreen: View {
 struct TimelineRowView: View, Equatable {
     let row: TimelineRow
     let pointSize: Double
+    let openAttachment: (AttachmentReference) -> Void
     @Environment(\.t3Theme) private var theme
     @ScaledMetric(relativeTo: .body) private var dynamicScale = 1.0
     nonisolated static func == (lhs: Self, rhs: Self) -> Bool { lhs.row == rhs.row && lhs.pointSize == rhs.pointSize }
@@ -206,7 +214,7 @@ struct TimelineRowView: View, Equatable {
         if row.isMessage {
             VStack(alignment: .leading, spacing: 8) {
                 NativeMarkdown(text: row.text, pointSize: pointSize * dynamicScale, streaming: row.value["streaming"].bool, preformatted: row.markdown)
-                AttachmentLinks(attachments: row.value["attachments"].array)
+                AttachmentLinks(attachments: row.value["attachments"].array, open: openAttachment)
             }
             .padding(row.isUser ? 14 : 0)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -263,10 +271,24 @@ struct TimelineRowView: View, Equatable {
 
 struct AttachmentLinks: View {
     let attachments: [JSONValue]
+    let open: (AttachmentReference) -> Void
     var body: some View {
-        ForEach(Array(attachments.enumerated()), id: \.offset) { _, attachment in
-            Label(attachment["name"].string.isEmpty ? "Attachment" : attachment["name"].string, systemImage: "paperclip")
-                .font(T3Font.caption).foregroundStyle(.secondary)
+        ForEach(Array(attachments.enumerated()), id: \.offset) { _, value in
+            let attachment = AttachmentReference(value)
+            Button { open(attachment) } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: attachment.type == "image" ? "photo" : "doc")
+                    Text(attachment.displayName).lineLimit(2)
+                    Spacer(minLength: 8)
+                    if attachment.sizeBytes > 0 {
+                        Text(ByteCountFormatter.string(fromByteCount: Int64(attachment.sizeBytes), countStyle: .file))
+                            .foregroundStyle(.secondary)
+                    }
+                    if attachment.canPreview { Image(systemName: "chevron.right").font(.system(size: 10)) }
+                    else { Text("Unsupported").foregroundStyle(.secondary) }
+                }.font(T3Font.caption).padding(.vertical, 8).contentShape(.rect)
+            }.buttonStyle(.plain).disabled(!attachment.canPreview)
+                .accessibilityLabel("Open " + attachment.displayName)
         }
     }
 }

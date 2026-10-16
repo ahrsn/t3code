@@ -78,6 +78,35 @@ import Observation
         throw XCTSkip("No pageable snapshot among the sampled conversations.")
     }
 
+    func testPreviewAttachmentFromSavedRealHostWhenRequested() async throws {
+        let env = ProcessInfo.processInfo.environment
+        guard env["T3_NATIVE_REUSE_SAVED_HOST"] == "1" || env["TEST_RUNNER_T3_NATIVE_REUSE_SAVED_HOST"] == "1" else { throw XCTSkip("Opt-in real-host attachment read.") }
+        let store = AppStore()
+        store.connect(try XCTUnwrap(store.activeHost))
+        let (events, continuation) = AsyncStream<Result<Bool, ClientError>>.makeStream()
+        let observer = ConnectionObserver(store: store, continuation: continuation)
+        observer.observe()
+        let deadline = Task { try await Task.sleep(for: .seconds(30)); continuation.finish() }
+        defer { deadline.cancel(); store.disconnect(); withExtendedLifetime(observer) {} }
+        for await event in events { _ = try event.get() }
+        XCTAssertTrue(store.connected)
+        let index = ThreadIndex(threads: store.threads)
+        for thread in (index.pinned + index.working + index.settled).prefix(12) {
+            await store.selectThread(thread.id)
+            try await waitForDetail(store, id: thread.id)
+            let attachments = store.conversation?.rows.flatMap { $0.value["attachments"].array }.map(AttachmentReference.init) ?? []
+            guard let attachment = attachments.first(where: { $0.canPreview && $0.sizeBytes < 10 * 1024 * 1024 }) else { continue }
+            let file = try await store.previewAttachment(attachment, hostID: store.activeHostID)
+            let bytes = try file.url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+            XCTAssertTrue(file.url.isFileURL)
+            XCTAssertGreaterThan(bytes, 0)
+            XCTAssertLessThanOrEqual(Int64(bytes), AttachmentDownloads.maximumBytes)
+            print("NATIVE_ATTACHMENT_REAL_DOWNLOAD bytes=\(bytes)")
+            return
+        }
+        throw XCTSkip("No supported attachment in the sampled conversation snapshots.")
+    }
+
     private func waitForDetail(_ store: AppStore, id: String) async throws {
         let deadline = ContinuousClock.now.advanced(by: .seconds(20))
         while ContinuousClock.now < deadline {

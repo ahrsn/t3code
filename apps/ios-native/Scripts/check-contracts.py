@@ -12,6 +12,8 @@ BASELINE = Path(__file__).resolve().parent / "contracts.json"
 EXPORTS = {
     "packages/contracts/src/auth.ts": ["AuthTokenExchangeRequest", "AuthAccessTokenResult", "AuthWebSocketTicketResult"],
     "packages/contracts/src/orchestrationV2.ts": ["OrchestrationV2ThreadLaunchInput", "OrchestrationV2SubscribeThreadInput", "OrchestrationV2RuntimeRequest", "OrchestrationV2ShellStreamItem", "OrchestrationV2ThreadStreamItem"],
+    "packages/contracts/src/assets.ts": ["AssetCreateUrlInput", "AssetCreateUrlResult"],
+    "packages/contracts/src/chatAttachment.ts": ["ChatImageAttachment", "ChatFileAttachment"],
     "packages/contracts/src/modelSelection.ts": ["ModelSelectionWire"],
     "packages/contracts/src/model.ts": [],
     "packages/contracts/src/settings.ts": [],
