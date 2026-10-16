@@ -45,7 +45,9 @@ extension AppStore {
                 .object(["id": .string("md-assistant"), "type": .string("assistant_message"), "text": .string(MarkdownFixtures.document)])
             ]
         }
-        detail.apply(.object(["kind": .string("snapshot"), "snapshotSequence": .number(10), "projection": .object([
+        let historyDemo = ProcessInfo.processInfo.arguments.contains("--history-demo")
+        if historyDemo { rows = HistoryFixtures.items(16..<24) }
+        detail.apply(.object(["hasMoreHistory": .bool(historyDemo), "historyCursor": historyDemo ? .string("16") : .null, "kind": .string("snapshot"), "snapshotSequence": .number(10), "projection": .object([
             "thread": threads.first(where: { $0.id == threadID }) ?? threads[0], "turnItems": .array(rows), "runtimeRequests": .array([
                 .object(["id": .string("request1"), "status": .string("pending"), "responseCapability": .object(["type": .string("live")])])
             ])

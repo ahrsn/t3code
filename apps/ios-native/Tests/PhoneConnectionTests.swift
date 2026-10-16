@@ -41,6 +41,43 @@ import Observation
         print("NATIVE_PHONE_RECONNECTED_DETAIL")
 
     }
+    func testLoadEarlierFromSavedRealHostWhenRequested() async throws {
+        let env = ProcessInfo.processInfo.environment
+        guard env["T3_NATIVE_REUSE_SAVED_HOST"] == "1" || env["TEST_RUNNER_T3_NATIVE_REUSE_SAVED_HOST"] == "1" else { throw XCTSkip("Opt-in real-host history read.") }
+        let store = AppStore()
+        store.connect(try XCTUnwrap(store.activeHost))
+        let (events, continuation) = AsyncStream<Result<Bool, ClientError>>.makeStream()
+        let observer = ConnectionObserver(store: store, continuation: continuation)
+        observer.observe()
+        let deadline = Task { try await Task.sleep(for: .seconds(30)); continuation.finish() }
+        defer { deadline.cancel(); store.disconnect(); withExtendedLifetime(observer) {} }
+        for await event in events { _ = try event.get() }
+        XCTAssertTrue(store.connected)
+        let index = ThreadIndex(threads: store.threads)
+        let candidates = Array((index.pinned + index.working + index.settled).prefix(8))
+        for thread in candidates {
+            await store.selectThread(thread.id)
+            try await waitForDetail(store, id: thread.id)
+            guard let detail = store.conversation, detail.projection.hasMoreHistory else { continue }
+            let before = detail.rows.map(\.id)
+            let cursor = detail.projection.historyCursor
+            let loaded = await store.loadHistory()
+            XCTAssertTrue(loaded, detail.historyError ?? "History page failed")
+            XCTAssertNil(detail.historyError)
+            XCTAssertNotEqual(detail.projection.historyCursor, cursor)
+            XCTAssertGreaterThan(detail.rows.count, before.count)
+            XCTAssertEqual(Set(detail.rows.map(\.id)).count, detail.rows.count)
+            let priorIDs = Set(before)
+            XCTAssertEqual(detail.rows.map(\.id).filter { priorIDs.contains($0) }, before)
+            let firstOld = try XCTUnwrap(detail.rows.firstIndex { $0.id == before.first })
+            XCTAssertGreaterThan(firstOld, 0)
+            XCTAssertTrue(detail.rows.prefix(firstOld).filter { $0.isMessage && !$0.value["streaming"].bool }.allSatisfy { $0.markdown?.source == $0.text })
+            print("NATIVE_HISTORY_REAL_PAGE before=\(before.count) after=\(detail.rows.count)")
+            return
+        }
+        throw XCTSkip("No pageable snapshot among the sampled conversations.")
+    }
+
     private func waitForDetail(_ store: AppStore, id: String) async throws {
         let deadline = ContinuousClock.now.advanced(by: .seconds(20))
         while ContinuousClock.now < deadline {

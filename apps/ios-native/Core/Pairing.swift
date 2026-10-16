@@ -108,7 +108,7 @@ actor HostAuthenticator {
         guard let http = response as? HTTPURLResponse else { throw ClientError("The server returned no HTTP response.") }
         guard (200..<300).contains(http.statusCode) else {
             if [401, 403].contains(http.statusCode) { throw ClientError("The server rejected this credential. Create a new pairing link.") }
-            if http.statusCode >= 500 || [408, 429].contains(http.statusCode) { throw TransportFailure(message: "The server returned HTTP \(http.statusCode). Reconnecting…") }
+            if http.statusCode >= 500 || [408, 429].contains(http.statusCode) { throw TransportFailure(message: "The server returned HTTP \(http.statusCode).") }
             throw ClientError("The server returned HTTP \(http.statusCode).")
         }
         return try JSONValue.decode(data)

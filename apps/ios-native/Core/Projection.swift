@@ -2,6 +2,7 @@ import Foundation
 
 struct TimelineRow: Identifiable, Equatable, Sendable {
     let value: JSONValue
+    var markdown: MarkdownDocument? = nil
     var id: String { value.id }
     var type: String { value["type"].string }
     var text: String {

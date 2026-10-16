@@ -8,6 +8,7 @@ struct ConversationScreen: View {
     @State private var showAppearance = false
     @State private var showModelSettings = false
     @State private var draftModel: JSONValue?
+    @State private var viewport = TimelineViewport()
     @FocusState private var focused: Bool
     @AppStorage("showReasoning") private var showReasoning = false
     @AppStorage("compactRows") private var compactRows = false
@@ -55,6 +56,7 @@ struct ConversationScreen: View {
         .task(id: threadID) {
             draft = UserDefaults.standard.string(forKey: draftKey) ?? ""
             draftModel = UserDefaults.standard.data(forKey: draftKey + ".model").flatMap { try? JSONValue.decode($0) }
+            viewport.frames.removeAll()
             await store.selectThread(threadID)
         }
         .onChange(of: draft) { _, value in UserDefaults.standard.set(value, forKey: draftKey) }
@@ -80,20 +82,42 @@ struct ConversationScreen: View {
                         }
                     }
                     if detail.projection.hasMoreHistory {
-                        Button(detail.loadingHistory ? "Loading…" : "Load earlier messages") { Task { await store.loadHistory() } }
+                        Button(detail.loadingHistory ? "Loading…" : detail.historyError == nil ? "Load earlier messages" : "Retry earlier messages") {
+                            Task {
+                                let firstID = detail.rows.first?.id
+                                let loaded = await store.loadHistory(expectedID: threadID) { viewport.pendingAnchor = viewport.readingAnchor() }
+                                if !loaded || detail.rows.first?.id == firstID { viewport.pendingAnchor = nil }
+                            }
+                        }
                             .disabled(detail.loadingHistory).font(T3Font.caption).frame(maxWidth: .infinity)
+                        if let error = detail.historyError { Text(error).font(T3Font.caption).foregroundStyle(.red) }
                     }
                     ForEach(detail.rows.filter { showReasoning || $0.type != "reasoning" }) { row in
-                        if row.type == "approval_request" || row.type == "user_input_request" {
-                            if let request = detail.projection.requests[row.value["requestId"].string] {
-                                RequestRow(row: row, request: request, store: store, threadID: threadID)
+                        VStack(alignment: .leading, spacing: 0) {
+                            Color.clear.frame(height: 1).id(TimelineViewport.anchorID(row.id))
+                            if row.type == "approval_request" || row.type == "user_input_request" {
+                                if let request = detail.projection.requests[row.value["requestId"].string] {
+                                    RequestRow(row: row, request: request, store: store, threadID: threadID)
+                                }
+                            } else {
+                                TimelineRowView(row: row, pointSize: messageSize).equatable()
                             }
-                        } else {
-                            TimelineRowView(row: row, pointSize: messageSize).equatable()
                         }
+                        .id(row.id)
+                        .onGeometryChange(for: CGRect.self) { proxy in
+                            proxy.frame(in: .named("conversation-viewport"))
+                        } action: { viewport.frames[row.id] = $0 }
+                        .onDisappear { viewport.frames.removeValue(forKey: row.id) }
                     }
                     Color.clear.frame(height: 1).id("bottom")
                 }.padding(.horizontal, 20).padding(.vertical, 18)
+            }
+            .coordinateSpace(name: "conversation-viewport")
+            .onScrollGeometryChange(for: CGFloat.self) { $0.containerSize.height } action: { _, height in viewport.height = height }
+            .onChange(of: detail.rows.first?.id) { _, _ in
+                guard let anchor = viewport.pendingAnchor else { return }
+                viewport.pendingAnchor = nil
+                reader.scrollTo(anchor.id, anchor: anchor.point)
             }
             .accessibilityIdentifier("conversation-timeline")
             .background(theme.canvas).scrollDismissesKeyboard(.interactively)
@@ -181,7 +205,7 @@ struct TimelineRowView: View, Equatable {
     var body: some View {
         if row.isMessage {
             VStack(alignment: .leading, spacing: 8) {
-                NativeMarkdown(text: row.text, pointSize: pointSize * dynamicScale, streaming: row.value["streaming"].bool)
+                NativeMarkdown(text: row.text, pointSize: pointSize * dynamicScale, streaming: row.value["streaming"].bool, preformatted: row.markdown)
                 AttachmentLinks(attachments: row.value["attachments"].array)
             }
             .padding(row.isUser ? 14 : 0)
@@ -190,7 +214,7 @@ struct TimelineRowView: View, Equatable {
             .background(row.isUser ? theme.color("messageSurface") : .clear, in: .rect(cornerRadius: 18))
             .textSelection(.enabled)
         } else if row.type == "proposed_plan" {
-            DisclosureGroup("Proposed plan") { NativeMarkdown(text: row.text, pointSize: pointSize * dynamicScale, streaming: row.value["streaming"].bool) }
+            DisclosureGroup("Proposed plan") { NativeMarkdown(text: row.text, pointSize: pointSize * dynamicScale, streaming: row.value["streaming"].bool, preformatted: row.markdown) }
         } else if row.type == "todo_list" {
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(row.value["steps"].array, id: \.id) { step in

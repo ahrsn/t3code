@@ -6,7 +6,7 @@ This is an early client. Direct server pairing, project and conversation navigat
 
 The composer model control selects a provider, model, and server-advertised options such as reasoning effort or fast mode. These choices persist with the local draft and are sent atomically with the next message. Changing them does not alter an active run. The picker respects project provider overrides, authentication, hidden models, and provider update requirements.
 
-Completed messages render native Markdown headings, nested lists, quotes, aligned tables, links, and fenced code with copying. A background actor caches completed message parses within limits of 128 messages and 512 KB of source text. Streaming text bypasses Markdown parsing; full formatting appears when the message finishes.
+Completed messages render native Markdown headings, nested lists, quotes, aligned tables, links, and fenced code with copying. A background actor shares completed message parses within limits of 128 messages and 512 KB of source text. Loaded history keeps its prepared presentations with the open conversation. Streaming text bypasses Markdown parsing; full formatting appears when the message finishes.
 
 ## Build
 
@@ -30,6 +30,8 @@ To install on your phone, select your own development team in Xcode, choose the 
 Create a pairing link in the desktop app's Connections settings. Paste that link into T3 Native's Connections sheet. For a Tailscale host, keep Tailscale connected on both devices and use the HTTPS tailnet address. LAN IP and `.local` links use the app's local networking exception. A pairing link needs `orchestration:operate` to send messages or answer requests. Read-only links can browse.
 
 The app exchanges the pairing token for a scoped access token, stores that token in a device-only Keychain item, and obtains a fresh WebSocket ticket on every connection. Saved host metadata contains no credential. Expired credentials require pairing again. Removing a server removes its local credential; revoke its session on the server to remove server-side access too.
+
+Loading an earlier page prepares its completed Markdown before insertion, then restores the visible message and its offset. Failed history requests keep the current conversation open and offer a local retry.
 
 The app disconnects in the background and reloads authoritative snapshots on foreground reconnect. Drafts stay on this device. A timed-out send is never retried automatically because it may already have reached the server.
 

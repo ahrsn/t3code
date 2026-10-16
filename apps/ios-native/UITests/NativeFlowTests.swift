@@ -85,6 +85,74 @@ import XCTest
         app.buttons["Done"].tap()
     }
 
+    func testEarlierHistoryKeepsReadingPositionWithPreviewData() {
+        let app = XCUIApplication(); app.launchArguments = ["--demo", "--history-demo", "--reset-demo-draft"]; app.launch()
+        app.staticTexts["Build a native iOS client"].tap()
+        let timeline = app.scrollViews["conversation-timeline"]
+        XCTAssertTrue(timeline.waitForExistence(timeout: 5))
+        let load = app.buttons["Load earlier messages"]
+        for _ in 0..<10 { if load.isHittable { break }; timeline.swipeDown() }
+        XCTAssertTrue(load.isHittable)
+        let marker = app.staticTexts["History marker 16"]
+        XCTAssertTrue(marker.isHittable)
+        let before = marker.frame.minY
+        capture("17-history-before-page-preview", app: app)
+        load.tap()
+        capture("18-history-after-page-preview", app: app)
+        XCTAssertTrue(marker.isHittable, "Loading history must keep the current message visible.")
+        XCTAssertEqual(marker.frame.minY, before, accuracy: 5, "Prepending a page must preserve the reading offset.")
+    }
+
+    func testLongMessageHistoryAnchorWithPreviewData() {
+        let app = XCUIApplication(); app.launchArguments = ["--demo", "--history-demo", "--history-tall-demo", "--reset-demo-draft"]; app.launch()
+        app.staticTexts["Build a native iOS client"].tap()
+        let timeline = app.scrollViews["conversation-timeline"]
+        let load = app.buttons["Load earlier messages"]
+        let marker = app.staticTexts["History marker 16"]
+        for _ in 0..<12 {
+            if load.isHittable && load.frame.minY >= timeline.frame.minY && marker.isHittable { break }
+            timeline.swipeDown()
+        }
+        XCTAssertTrue(load.isHittable)
+        XCTAssertTrue(marker.isHittable)
+        let before = marker.frame.minY
+        load.tap()
+        XCTAssertTrue(marker.isHittable)
+        XCTAssertEqual(marker.frame.minY, before, accuracy: 5)
+        capture("19-history-long-message-preview", app: app)
+    }
+
+    func testHistoryRetryAndFinalPageWithPreviewData() {
+        let app = XCUIApplication(); app.launchArguments = ["--demo", "--history-demo", "--history-error-demo", "--reset-demo-draft"]; app.launch()
+        app.staticTexts["Build a native iOS client"].tap()
+        let timeline = app.scrollViews["conversation-timeline"]
+        let load = app.buttons["Load earlier messages"]
+        for _ in 0..<10 { if load.isHittable { break }; timeline.swipeDown() }
+        load.tap()
+        let failure = app.staticTexts["The server returned HTTP 503."]
+        XCTAssertTrue(failure.waitForExistence(timeout: 5))
+        capture("20-history-retry-preview", app: app)
+        let marker = app.staticTexts["History marker 16"]
+        let beforeRetry = marker.frame.minY
+        app.buttons["Retry earlier messages"].tap()
+        XCTAssertFalse(failure.exists)
+        XCTAssertTrue(marker.isHittable)
+        XCTAssertEqual(marker.frame.minY, beforeRetry, accuracy: 5)
+        capture("21-history-recovered-preview", app: app)
+        for _ in 0..<12 { if load.isHittable { break }; timeline.swipeDown() }
+        let older = app.staticTexts["History marker 8"]
+        XCTAssertTrue(older.isHittable)
+        let beforeFinal = older.frame.minY
+        load.tap()
+        XCTAssertFalse(load.exists)
+        XCTAssertTrue(older.isHittable)
+        XCTAssertEqual(older.frame.minY, beforeFinal, accuracy: 5)
+        capture("22-history-final-page-preview", app: app)
+        app.buttons["Jump to latest message"].tap()
+        XCTAssertTrue(app.staticTexts["History marker 23"].isHittable)
+        capture("23-history-jump-latest-preview", app: app)
+    }
+
     func testPairWithRealHostWhenProvided() throws {
         let link = ProcessInfo.processInfo.environment["T3_NATIVE_PAIRING_URL"] ?? ProcessInfo.processInfo.environment["TEST_RUNNER_T3_NATIVE_PAIRING_URL"] ?? ""
         guard !link.isEmpty else { throw XCTSkip("Set TEST_RUNNER_T3_NATIVE_PAIRING_URL for a scoped test host.") }

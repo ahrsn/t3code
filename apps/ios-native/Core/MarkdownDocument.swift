@@ -1,5 +1,12 @@
 import Foundation
 
+struct MarkdownDocument: Sendable, Equatable {
+    let source: String
+    let blocks: [MarkdownBlock]
+    // Parsing is deterministic; the source identifies the presentation.
+    static func == (lhs: Self, rhs: Self) -> Bool { lhs.source == rhs.source }
+}
+
 struct MarkdownListItem: Sendable {
     let ordinal: Int
     let blocks: [MarkdownBlock]
@@ -84,6 +91,17 @@ actor MarkdownDocuments {
     private var order: [String] = []
     private var sourceBytes = 0
     private let byteLimit = 512_000
+
+    func documents(for items: [JSONValue]) -> [String: MarkdownDocument] {
+        var result: [String: MarkdownDocument] = [:]
+        for wrapper in items {
+            guard !Task.isCancelled else { return [:] }
+            let row = TimelineRow(value: wrapper["item"].isNull ? wrapper : wrapper["item"])
+            guard row.isMessage || row.type == "proposed_plan", !row.value["streaming"].bool else { continue }
+            result[row.id] = MarkdownDocument(source: row.text, blocks: blocks(for: row.text))
+        }
+        return result
+    }
 
     func blocks(for source: String) -> [MarkdownBlock] {
         guard !Task.isCancelled else { return [] }

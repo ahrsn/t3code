@@ -7,11 +7,20 @@ import Observation
     var rows: [TimelineRow] = []
     var error: String?
     var loadingHistory = false
+    var historyError: String?
+    @ObservationIgnored var historyDocuments: [String: MarkdownDocument] = [:]
     init(id: String) { self.id = id }
     func apply(_ item: JSONValue) {
         if item["kind"].string == "client.error" { error = item["message"].string; return }
         projection.apply(item)
-        rows = projection.rows
+        refreshRows()
+    }
+    func refreshRows() {
+        rows = projection.rows.map { row in
+            var row = row
+            if let document = historyDocuments[row.id], document.source == row.text { row.markdown = document }
+            return row
+        }
     }
 }
 
@@ -175,7 +184,7 @@ import Observation
             guard let conversation else { return }
             for item in batch { conversation.projection.apply(item) }
             if let failure = batch.last(where: { $0["kind"].string == "client.error" }) { conversation.error = failure["message"].string }
-            conversation.rows = conversation.projection.rows
+            conversation.refreshRows()
         }
     }
 
@@ -217,15 +226,25 @@ import Observation
         }
         catch { self.error = error.localizedDescription }
     }
-    func loadHistory() async {
-        guard let detail = conversation, !detail.loadingHistory, let cursor = detail.projection.historyCursor, let host = activeHost else { return }
+    func loadHistory(expectedID: String? = nil, beforeApplying: () -> Void = {}) async -> Bool {
+        if let expectedID, conversation?.id != expectedID { return false }
+        #if DEBUG
+        if isDemo { return await loadDemoHistory(beforeApplying: beforeApplying) }
+        #endif
+        guard let detail = conversation, !detail.loadingHistory, let cursor = detail.projection.historyCursor, let host = activeHost else { return false }
         detail.loadingHistory = true; defer { detail.loadingHistory = false }
         do {
             let token = try CredentialVault.token(for: host.id)
             let page = try await authenticator.history(host: host, token: token, threadID: detail.id, cursor: cursor)
-            guard conversation === detail else { return }
-            detail.projection.prependHistory(page); detail.rows = detail.projection.rows
-        } catch { detail.error = error.localizedDescription }
+            guard conversation === detail else { return false }
+            let documents = await MarkdownDocuments.shared.documents(for: page["items"].array)
+            guard conversation === detail else { return false }
+            beforeApplying()
+            detail.historyDocuments.merge(documents) { _, new in new }
+            detail.historyError = nil
+            detail.projection.prependHistory(page); detail.refreshRows()
+            return true
+        } catch { detail.historyError = error.localizedDescription; return false }
     }
     func respond(request: JSONValue, threadID: String, decision: String? = nil, answers: JSONValue? = nil) async {
         guard !pendingActions.contains(request.id) else { return }

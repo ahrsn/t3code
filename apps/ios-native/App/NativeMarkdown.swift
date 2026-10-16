@@ -4,21 +4,21 @@ struct NativeMarkdown: View {
     let text: String
     let pointSize: Double
     let streaming: Bool
-    @State private var document: RenderedDocument?
-    private struct RenderedDocument { let source: String; let blocks: [MarkdownBlock] }
+    var preformatted: MarkdownDocument? = nil
+    @State private var document: MarkdownDocument?
     private struct RenderKey: Hashable { let text: String; let streaming: Bool }
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if !streaming, let document, document.source == text {
+            if !streaming, let document = (preformatted?.source == text ? preformatted : document), document.source == text {
                 MarkdownBlocksView(blocks: document.blocks, pointSize: pointSize)
             } else { Text(text).font(T3Font.fixed(pointSize)).lineSpacing(4) }
         }
         .task(id: RenderKey(text: text, streaming: streaming)) {
-            guard !streaming else { return }
+            guard !streaming, preformatted?.source != text else { return }
             let source = text
             let blocks = await MarkdownDocuments.shared.blocks(for: source)
             guard !Task.isCancelled else { return }
-            document = RenderedDocument(source: source, blocks: blocks)
+            document = MarkdownDocument(source: source, blocks: blocks)
         }
     }
 }
