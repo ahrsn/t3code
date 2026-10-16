@@ -334,8 +334,8 @@ import XCTest
         func tool(_ title: String) -> XCUIElement { app.buttons.matching(NSPredicate(format: "label CONTAINS %@", title)).firstMatch }
         func outerScrollUp() {
             let scroll = app.scrollViews["conversation-timeline"]
-            scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.01, dy: 0.85)).press(forDuration: 0.05,
-                thenDragTo: scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.01, dy: 0.2)))
+            scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.07, dy: 0.60)).press(forDuration: 0.05,
+                thenDragTo: scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.07, dy: 0.22)))
         }
         XCTAssertTrue(tool("Inspect build result").waitForExistence(timeout: 10))
         capture("64-native-tools-collapsed-preview", app: app)
@@ -365,10 +365,14 @@ import XCTest
         let limit = app.staticTexts["Copy includes only the displayed portion."]
         XCTAssertTrue(limit.waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["Shortened output"].exists)
-        for _ in 0..<4 { if limit.isHittable { break }; outerScrollUp() }
-        XCTAssertTrue(limit.isHittable)
         capture("69-native-bounded-tool-output-preview", app: app)
-        outerScrollUp()
+        let send = app.buttons["send-message"]
+        for _ in 0..<4 {
+            if limit.isHittable && limit.frame.maxY < send.frame.minY - 60 { break }
+            outerScrollUp()
+        }
+        XCTAssertTrue(limit.isHittable)
+        XCTAssertLessThan(limit.frame.maxY, send.frame.minY - 60, "The copy warning must be clear of the composer.")
         capture("73-native-tool-shortened-warning-preview", app: app)
         tool("Read a long result").tap()
         tool("Removed output").tap()
