@@ -59,6 +59,32 @@ import XCTest
         XCTAssertEqual(app.buttons["model-settings"].value as? String, "GPT-6.1 Sol")
     }
 
+    func testNativeMarkdownWithPreviewData() {
+        let app = XCUIApplication(); app.launchArguments = ["--demo", "--markdown-demo", "--reset-demo-draft"]; app.launch()
+        app.staticTexts["Build a native iOS client"].tap()
+        XCTAssertTrue(app.buttons["model-settings"].waitForExistence(timeout: 5))
+        let timeline = app.scrollViews["conversation-timeline"]
+        capture("14-markdown-code-table-preview", app: app)
+        if app.buttons["Copy"].firstMatch.isHittable {
+            app.buttons["Copy"].firstMatch.tap()
+            XCTAssertTrue(app.buttons["Copied"].firstMatch.waitForExistence(timeout: 3))
+        }
+        timeline.swipeDown(); timeline.swipeDown()
+        capture("15-markdown-headings-lists-preview", app: app)
+        XCTAssertTrue(app.staticTexts["Keep your place on reconnect"].exists)
+        XCTAssertTrue(app.staticTexts["Connection states"].exists)
+        XCTAssertTrue(app.scrollViews["markdown-table"].exists)
+        app.buttons["Conversation actions"].tap(); app.buttons["Text and appearance"].tap()
+        app.buttons["appearance-choice"].tap(); app.buttons["Light"].tap()
+        app.sliders["Conversation text size"].adjust(toNormalizedSliderPosition: 0.6)
+        app.buttons["Done"].tap(); app.buttons["Jump to latest message"].tap()
+        capture("16-markdown-light-larger-type-preview", app: app)
+        app.buttons["Conversation actions"].tap(); app.buttons["Text and appearance"].tap()
+        app.buttons["appearance-choice"].tap(); app.buttons["System"].tap()
+        app.sliders["Conversation text size"].adjust(toNormalizedSliderPosition: 1.0 / 6.0)
+        app.buttons["Done"].tap()
+    }
+
     func testPairWithRealHostWhenProvided() throws {
         let link = ProcessInfo.processInfo.environment["T3_NATIVE_PAIRING_URL"] ?? ProcessInfo.processInfo.environment["TEST_RUNNER_T3_NATIVE_PAIRING_URL"] ?? ""
         guard !link.isEmpty else { throw XCTSkip("Set TEST_RUNNER_T3_NATIVE_PAIRING_URL for a scoped test host.") }

@@ -33,12 +33,18 @@ extension AppStore {
         }
         shell.apply(.object(["kind": .string("snapshot"), "snapshot": .object(["snapshotSequence": .number(10), "projects": .array(projects), "threads": .array(threads)])]))
         let detail = Conversation(id: threadID)
-        let rows: [JSONValue] = [
+        var rows: [JSONValue] = [
             .object(["id": .string("i1"), "type": .string("user_message"), "text": .string("Keep the T3 branding and fonts. I want the same threads and conversations, with native iOS controls.")]),
             .object(["id": .string("i2"), "type": .string("assistant_message"), "text": .string("The client uses the same T3 protocol and DM Sans. Threads stay grouped into Working and Settled.\n\nYou can adjust the text size and spacing in Appearance. The composer stays above the keyboard, and code blocks scroll horizontally.\n\n```swift\nText(message.text)\n    .font(T3Font.body)\n    .textSelection(.enabled)\n```\n\nThe server connection stays compatible with your existing T3 hosts.")]),
             .object(["id": .string("i3"), "type": .string("command_execution"), "title": .string("Build iOS app"), "input": .string("xcodebuild -scheme T3Native build"), "output": .string("BUILD SUCCEEDED")]),
             .object(["id": .string("i4"), "type": .string("approval_request"), "requestId": .string("request1"), "prompt": .string("Run the connection tests against the development server?")])
         ]
+        if ProcessInfo.processInfo.arguments.contains("--markdown-demo") {
+            rows = [
+                .object(["id": .string("md-user"), "type": .string("user_message"), "text": .string("Show the reconnect implementation and verification notes.")]),
+                .object(["id": .string("md-assistant"), "type": .string("assistant_message"), "text": .string(MarkdownFixtures.document)])
+            ]
+        }
         detail.apply(.object(["kind": .string("snapshot"), "snapshotSequence": .number(10), "projection": .object([
             "thread": threads.first(where: { $0.id == threadID }) ?? threads[0], "turnItems": .array(rows), "runtimeRequests": .array([
                 .object(["id": .string("request1"), "status": .string("pending"), "responseCapability": .object(["type": .string("live")])])

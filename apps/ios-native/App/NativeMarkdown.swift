@@ -4,51 +4,105 @@ struct NativeMarkdown: View {
     let text: String
     let pointSize: Double
     let streaming: Bool
-    @State private var blocks: [MarkdownBlock] = []
+    @State private var document: RenderedDocument?
+    private struct RenderedDocument { let source: String; let blocks: [MarkdownBlock] }
     private struct RenderKey: Hashable { let text: String; let streaming: Bool }
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if streaming || blocks.isEmpty { Text(text).font(T3Font.fixed(pointSize)).lineSpacing(4) }
-            ForEach(Array((streaming ? [] : blocks).enumerated()), id: \.offset) { _, block in
-                switch block {
-                case .prose(let attributed): Text(attributed).font(T3Font.fixed(pointSize)).lineSpacing(4).fixedSize(horizontal: false, vertical: true)
-                case .code(let code, let language): CodeBlock(code: code, language: language, pointSize: max(12, pointSize - 3))
-                }
-            }
+            if !streaming, let document, document.source == text {
+                MarkdownBlocksView(blocks: document.blocks, pointSize: pointSize)
+            } else { Text(text).font(T3Font.fixed(pointSize)).lineSpacing(4) }
         }
         .task(id: RenderKey(text: text, streaming: streaming)) {
             guard !streaming else { return }
             let source = text
-            let parsed = await Task.detached(priority: .userInitiated) { MarkdownBlock.parse(source) }.value
-            guard !Task.isCancelled else { return }; blocks = parsed
+            let blocks = await MarkdownDocuments.shared.blocks(for: source)
+            guard !Task.isCancelled else { return }
+            document = RenderedDocument(source: source, blocks: blocks)
         }
     }
 }
 
-enum MarkdownBlock: Sendable {
-    case prose(AttributedString), code(String, String)
-    static func parse(_ text: String) -> [MarkdownBlock] {
-        var result: [MarkdownBlock] = [], buffer: [String] = []
-        var language: String?, fence: String?
-        func appendProse() {
-            let source = buffer.joined(separator: "\n")
-            if !source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                let value = (try? AttributedString(markdown: source, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(source)
-                result.append(.prose(value))
+private struct MarkdownBlocksView: View {
+    let blocks: [MarkdownBlock]
+    let pointSize: Double
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
+                MarkdownBlockView(block: block, pointSize: pointSize)
             }
-            buffer = []
+        }.frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct MarkdownBlockView: View {
+    let block: MarkdownBlock
+    let pointSize: Double
+    @Environment(\.t3Theme) private var theme
+    var body: some View {
+        switch block {
+        case .prose(let text):
+            Text(text).font(T3Font.fixed(pointSize)).lineSpacing(4).fixedSize(horizontal: false, vertical: true)
+        case .heading(let text, let level):
+            Text(text).font(T3Font.fixed(pointSize + (level == 1 ? 6 : level == 2 ? 3 : 1), weight: .bold))
+                .fixedSize(horizontal: false, vertical: true).accessibilityAddTraits(.isHeader)
+        case .code(let code, let language):
+            CodeBlock(code: code, language: language, pointSize: max(12, pointSize - 3))
+        case .list(let items, let ordered):
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(ordered ? "\(item.ordinal)." : "•")
+                            .font(T3Font.fixed(pointSize)).foregroundStyle(theme.muted)
+                            .frame(minWidth: 16, alignment: .trailing)
+                        MarkdownBlocksView(blocks: item.blocks, pointSize: pointSize)
+                    }
+                }
+            }
+        case .quote(let blocks):
+            HStack(alignment: .top, spacing: 12) {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(theme.border).frame(width: 3)
+                MarkdownBlocksView(blocks: blocks, pointSize: pointSize).foregroundStyle(theme.text)
+            }.fixedSize(horizontal: false, vertical: true)
+        case .table(let table):
+            MarkdownTableView(table: table, pointSize: pointSize)
+        case .rule: Divider().overlay(theme.border).padding(.vertical, 4)
         }
-        for line in text.components(separatedBy: "\n") {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if fence == nil && (trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~")) {
-                appendProse(); fence = String(trimmed.prefix(3)); language = String(trimmed.dropFirst(3))
-            } else if let opening = fence, trimmed.hasPrefix(opening) {
-                result.append(.code(buffer.joined(separator: "\n"), language ?? "")); buffer = []; fence = nil; language = nil
-            } else { buffer.append(line) }
+    }
+}
+
+private struct MarkdownTableView: View {
+    let table: MarkdownTable
+    let pointSize: Double
+    @Environment(\.t3Theme) private var theme
+    var body: some View {
+        ScrollView(.horizontal) {
+            Grid(alignment: .leading, horizontalSpacing: 20, verticalSpacing: 10) {
+                if !table.header.isEmpty {
+                    row(table.header, header: true)
+                    Divider().overlay(theme.border).gridCellUnsizedAxes(.horizontal)
+                }
+                ForEach(Array(table.rows.enumerated()), id: \.offset) { _, cells in row(cells, header: false) }
+            }.padding(.vertical, 8)
+        }.accessibilityIdentifier("markdown-table")
+    }
+    private func row(_ cells: [AttributedString], header: Bool) -> some View {
+        GridRow {
+            ForEach(Array(cells.enumerated()), id: \.offset) { index, text in
+                Text(text).font(T3Font.fixed(pointSize, weight: header ? .bold : .regular))
+                    .fixedSize(horizontal: true, vertical: false)
+                    .gridColumnAlignment(alignment(index))
+            }
         }
-        if fence != nil { result.append(.code(buffer.joined(separator: "\n"), language ?? "")) }
-        else { appendProse() }
-        return result
+    }
+    private func alignment(_ index: Int) -> HorizontalAlignment {
+        guard table.columns.indices.contains(index) else { return .leading }
+        switch table.columns[index].alignment {
+        case .center: return .center
+        case .right: return .trailing
+        default: return .leading
+        }
     }
 }
 

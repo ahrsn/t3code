@@ -6,6 +6,8 @@ This is an early client. Direct server pairing, project and conversation navigat
 
 The composer model control selects a provider, model, and server-advertised options such as reasoning effort or fast mode. These choices persist with the local draft and are sent atomically with the next message. Changing them does not alter an active run. The picker respects project provider overrides, authentication, hidden models, and provider update requirements.
 
+Completed messages render native Markdown headings, nested lists, quotes, aligned tables, links, and fenced code with copying. A background actor caches completed message parses within limits of 128 messages and 512 KB of source text. Streaming text bypasses Markdown parsing; full formatting appears when the message finishes.
+
 ## Build
 
 Use Xcode 26 or later and XcodeGen. The checked-in Xcode project can be opened directly. Regenerate it after changing `project.yml`.

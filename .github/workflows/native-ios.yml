@@ -74,7 +74,8 @@ jobs:
             -parallel-testing-enabled NO -jobs 2 CODE_SIGNING_ALLOWED=NO \
             -only-testing:T3NativeUITests/NativeFlowTests/testNativeAppearanceAndConversationWithPreviewData \
             -only-testing:T3NativeUITests/NativeFlowTests/testUpstreamThemeVariantsWithPreviewData \
-            -only-testing:T3NativeUITests/NativeFlowTests/testModelOptionsAndProviderDraftWithPreviewData test
+            -only-testing:T3NativeUITests/NativeFlowTests/testModelOptionsAndProviderDraftWithPreviewData \
+            -only-testing:T3NativeUITests/NativeFlowTests/testNativeMarkdownWithPreviewData test
       - uses: actions/upload-artifact@v4
         if: always()
         with:
