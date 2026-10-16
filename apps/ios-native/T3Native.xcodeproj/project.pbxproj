@@ -11,6 +11,7 @@
 		139605D8BF8C28A591EEEDC8 /* AttachmentLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5123CC38BABE80E4465BB8A4 /* AttachmentLifecycleTests.swift */; };
 		150E7192682104CEC2D38131 /* NativeFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCA268F03BD60B780802D84E /* NativeFlowTests.swift */; };
 		1ECD5A5F9946528F54E88544 /* MarkdownDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D1DD53C4D33ADE1AE2F244A /* MarkdownDocument.swift */; };
+		202B3C80119AC9302F297388 /* PhotoAttachment.swift in Sources */ = {isa = PBXBuildFile; fileRef = F85C2D859E23E788C31F9487 /* PhotoAttachment.swift */; };
 		25C38BA930947434E9E61B39 /* DMSans_500Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = ACF29F2D85EB2EB56FD84D64 /* DMSans_500Medium.ttf */; };
 		2835B6FE6FA441F180E09271 /* MarkdownTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0FC63018ECB5A7168C2EDE3 /* MarkdownTests.swift */; };
 		32DAC0C91F0D9AC647DD0E5B /* AttachmentDraftFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = F05FD9D2C19CC391531C131E /* AttachmentDraftFixtures.swift */; };
@@ -30,7 +31,9 @@
 		8FA0747F6DC521691ED07E75 /* ProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DDBFF0BFB4D0AE0B8F56813 /* ProtocolTests.swift */; };
 		99E775AF8221582622E3D59E /* ComposerAttachmentDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6CD0ECF2BDA98975F0E6C3D /* ComposerAttachmentDraft.swift */; };
 		99EEA471F8AA30CF4059C435 /* PhoneConnectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A347D912635F9428A8BB9C2 /* PhoneConnectionTests.swift */; };
+		9F8894A4973DCCD5EE3AB781 /* PhotoSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E4E0B2011275EA5CD5E6D07 /* PhotoSelection.swift */; };
 		A795E1D318D61D0AD2FFB10C /* RPCTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 009CF62AD1A751EBE94AAEF0 /* RPCTransport.swift */; };
+		AFFD2FF13851FA63C62CDE82 /* PhotoAttachmentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE91C0FF668E411C477B7FCC /* PhotoAttachmentTests.swift */; };
 		B5C690284CDA8ED753FE0851 /* T3Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE8C2D9A5AC781E52F138C2F /* T3Theme.swift */; };
 		B977308C25565B01F51630A7 /* OFL.txt in Resources */ = {isa = PBXBuildFile; fileRef = 63E42F836D73B5C6C6E73F0F /* OFL.txt */; };
 		C6BE88CE67CE92ED32D60FC7 /* MarkdownFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D46114E6DB8D7D58369DBE8 /* MarkdownFixtures.swift */; };
@@ -77,6 +80,7 @@
 		2A347D912635F9428A8BB9C2 /* PhoneConnectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneConnectionTests.swift; sourceTree = "<group>"; };
 		2AC5868CDEB6CC8B912FEFF4 /* T3Wordmark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = T3Wordmark.swift; sourceTree = "<group>"; };
 		2D1DD53C4D33ADE1AE2F244A /* MarkdownDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownDocument.swift; sourceTree = "<group>"; };
+		2E4E0B2011275EA5CD5E6D07 /* PhotoSelection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoSelection.swift; sourceTree = "<group>"; };
 		2E567BC6118696BD41B8288A /* HistoryFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryFixtures.swift; sourceTree = "<group>"; };
 		362F3B97C86E57813A70BB98 /* T3NativeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = T3NativeApp.swift; sourceTree = "<group>"; };
 		3A294A180E427B3526CC9166 /* AttachmentPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentPreview.swift; sourceTree = "<group>"; };
@@ -105,6 +109,7 @@
 		BCA268F03BD60B780802D84E /* NativeFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeFlowTests.swift; sourceTree = "<group>"; };
 		C6CD0ECF2BDA98975F0E6C3D /* ComposerAttachmentDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerAttachmentDraft.swift; sourceTree = "<group>"; };
 		C891BD321BB7D7B7282FDDE8 /* NativeMarkdown.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeMarkdown.swift; sourceTree = "<group>"; };
+		CE91C0FF668E411C477B7FCC /* PhotoAttachmentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoAttachmentTests.swift; sourceTree = "<group>"; };
 		D0A455758196021580FEE29B /* CredentialVault.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CredentialVault.swift; sourceTree = "<group>"; };
 		D0FC63018ECB5A7168C2EDE3 /* MarkdownTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownTests.swift; sourceTree = "<group>"; };
 		DE8C2D9A5AC781E52F138C2F /* T3Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = T3Theme.swift; sourceTree = "<group>"; };
@@ -113,6 +118,7 @@
 		E4ECAAEEE764DAF182EBF3E8 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		E7D6ED07A72A1A4E4655AD83 /* AttachmentFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentFixtures.swift; sourceTree = "<group>"; };
 		F05FD9D2C19CC391531C131E /* AttachmentDraftFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentDraftFixtures.swift; sourceTree = "<group>"; };
+		F85C2D859E23E788C31F9487 /* PhotoAttachment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoAttachment.swift; sourceTree = "<group>"; };
 		F8D324C74F3E8F738EDB5E2B /* T3NativeTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = T3NativeTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		FA99D05B31D7770BFDB103EB /* ComposerAttachments.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerAttachments.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -139,6 +145,7 @@
 				D0FC63018ECB5A7168C2EDE3 /* MarkdownTests.swift */,
 				5C75D57C7868646BE153B250 /* ModelCatalogTests.swift */,
 				2A347D912635F9428A8BB9C2 /* PhoneConnectionTests.swift */,
+				CE91C0FF668E411C477B7FCC /* PhotoAttachmentTests.swift */,
 				0DDBFF0BFB4D0AE0B8F56813 /* ProtocolTests.swift */,
 			);
 			path = Tests;
@@ -164,6 +171,7 @@
 				2D1DD53C4D33ADE1AE2F244A /* MarkdownDocument.swift */,
 				6223770839B805AF0A4A8431 /* ModelCatalog.swift */,
 				91D00B36D934B0EFE16693BA /* Pairing.swift */,
+				F85C2D859E23E788C31F9487 /* PhotoAttachment.swift */,
 				45BF5A9F16EC892F7B198F1A /* Projection.swift */,
 				009CF62AD1A751EBE94AAEF0 /* RPCTransport.swift */,
 				1523B1DC21CB7F61BDF67843 /* ThreadIndex.swift */,
@@ -198,6 +206,7 @@
 				8D46114E6DB8D7D58369DBE8 /* MarkdownFixtures.swift */,
 				10C448EC3BC56877688CBFA0 /* ModelSettingsScreen.swift */,
 				C891BD321BB7D7B7282FDDE8 /* NativeMarkdown.swift */,
+				2E4E0B2011275EA5CD5E6D07 /* PhotoSelection.swift */,
 				362F3B97C86E57813A70BB98 /* T3NativeApp.swift */,
 				DE8C2D9A5AC781E52F138C2F /* T3Theme.swift */,
 				2AC5868CDEB6CC8B912FEFF4 /* T3Wordmark.swift */,
@@ -348,6 +357,7 @@
 				2835B6FE6FA441F180E09271 /* MarkdownTests.swift in Sources */,
 				4A7CF02532591BD4B0F7C89B /* ModelCatalogTests.swift in Sources */,
 				99EEA471F8AA30CF4059C435 /* PhoneConnectionTests.swift in Sources */,
+				AFFD2FF13851FA63C62CDE82 /* PhotoAttachmentTests.swift in Sources */,
 				8FA0747F6DC521691ED07E75 /* ProtocolTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -376,6 +386,8 @@
 				3A753897648A9A83ED19044B /* ModelSettingsScreen.swift in Sources */,
 				83E25D2FF02D4DB658550544 /* NativeMarkdown.swift in Sources */,
 				87EFE6FE594EB4092BA61B1F /* Pairing.swift in Sources */,
+				202B3C80119AC9302F297388 /* PhotoAttachment.swift in Sources */,
+				9F8894A4973DCCD5EE3AB781 /* PhotoSelection.swift in Sources */,
 				7097A489AE4AA6F410EA5028 /* Projection.swift in Sources */,
 				A795E1D318D61D0AD2FFB10C /* RPCTransport.swift in Sources */,
 				E589C7E8EBB144A0CDB08962 /* T3NativeApp.swift in Sources */,

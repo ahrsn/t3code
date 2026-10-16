@@ -1,5 +1,6 @@
 import SwiftUI
 import Observation
+import PhotosUI
 
 @MainActor @Observable final class ComposerAttachmentDraft {
     var items: [DraftAttachment] = []
@@ -26,6 +27,25 @@ import Observation
                 let loaded = try await AttachmentDraftStore.shared.importFile(url, key: key, limits: limits)
                 if generation == token { items = loaded; error = nil }
             } catch { if generation == token { self.error = error.localizedDescription }; break }
+        }
+    }
+    func addPhotos(_ selection: [PhotosPickerItem], limits: AttachmentLimits, expectedKey: String) async {
+        guard !busy else { return }
+        guard expectedKey == key else { error = "The conversation changed. Choose the photos again."; return }
+        busy = true; defer { busy = false }
+        let token = generation, key = key
+        for item in selection {
+            do {
+                let photo = try await PhotoSelection.load(item)
+                try Task.checkCancellation()
+                guard generation == token else { return }
+                let loaded = try await AttachmentDraftStore.shared.importFile(photo.file.url, key: key, limits: limits)
+                if generation == token { items = loaded; error = nil }
+                withExtendedLifetime(photo) {}
+            } catch {
+                if generation == token && !Task.isCancelled { self.error = error.localizedDescription }
+                break
+            }
         }
     }
     func remove(_ item: DraftAttachment) async {

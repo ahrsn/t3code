@@ -146,7 +146,8 @@ import Observation
         let source = try AttachmentDraftFixtures.file(image: false), image = try AttachmentDraftFixtures.file(image: true)
         let limits = AttachmentLimits(config: store.config)
         _ = try await AttachmentDraftStore.shared.importFile(source.url, key: key, limits: limits)
-        let files = try await AttachmentDraftStore.shared.importFile(image.url, key: key, limits: limits)
+        let photo = try PhotoAttachment.receive(image.url)
+        let files = try await AttachmentDraftStore.shared.importFile(photo.file.url, key: key, limits: limits)
         var localURLs: [URL] = []
         for file in files { localURLs.append(try await AttachmentDraftStore.shared.uploadFile(file, key: key)) }
         let refused = await store.send(text: "Review these attachments.", threadID: thread, model: .object(["instanceId": .string("unavailable"), "model": .string("missing")]), attachments: files, draftKey: key)

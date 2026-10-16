@@ -248,6 +248,86 @@ import XCTest
         XCTAssertTrue(alpha.exists)
         capture("44-cleanup-failure-keeps-server-preview", app: app)
     }
+    func testNativePhotosPickerWithPreviewData() throws {
+        let env = ProcessInfo.processInfo.environment
+        let count = Int(env["T3_NATIVE_PHOTO_FIXTURE_COUNT"] ?? env["TEST_RUNNER_T3_NATIVE_PHOTO_FIXTURE_COUNT"] ?? "") ?? 0
+        guard (2...3).contains(count) else { throw XCTSkip("Seed photo fixtures and set TEST_RUNNER_T3_NATIVE_PHOTO_FIXTURE_COUNT.") }
+        let app = XCUIApplication(); app.launchArguments = ["--demo", "--attachment-draft-demo", "--reset-demo-attachments"]; app.launch()
+        app.staticTexts["Build a native iOS client"].tap()
+        let attach = app.buttons["attach-files"]
+        expectation(for: NSPredicate(format: "enabled == true"), evaluatedWith: attach)
+        waitForExpectations(timeout: 5)
+        attach.tap(); capture("48-photo-source-menu-preview", app: app)
+        app.buttons["Choose photos"].tap()
+        let photos = app.images.matching(identifier: "PXGGridLayout-Info")
+        XCTAssertTrue(photos.firstMatch.waitForExistence(timeout: 30))
+        capture("49-native-photo-picker-preview", app: app)
+        app.buttons["Cancel"].tap()
+        XCTAssertFalse(app.scrollViews["draft-attachments"].exists)
+        attach.tap(); app.buttons["Choose photos"].tap()
+        XCTAssertTrue(photos.firstMatch.waitForExistence(timeout: 30))
+        XCTAssertGreaterThanOrEqual(photos.count, count)
+        for index in 0..<count { photos.element(boundBy: index).coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+        capture("50-selected-photos-preview", app: app)
+        app.buttons["Done"].tap()
+        let chips = app.scrollViews["draft-attachments"]
+        XCTAssertTrue(chips.waitForExistence(timeout: 15))
+        let remove = chips.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Remove "))
+        expectation(for: NSPredicate(format: "count == %d", count), evaluatedWith: remove)
+        waitForExpectations(timeout: 15)
+        XCTAssertTrue(chips.staticTexts["T3 Photo Fixture 1.png"].exists)
+        XCTAssertTrue(chips.staticTexts["T3 Photo Fixture 2.jpeg"].exists)
+        if count == 3 { XCTAssertTrue(chips.staticTexts["T3 Photo Fixture 3.jpeg"].exists, "Photos should supply a compatible JPEG for HEIC.") }
+        XCTAssertFalse(app.buttons["send-message"].isEnabled, "Preview photos cannot send to a host.")
+        capture("51-photo-drafts-preview", app: app)
+        chips.swipeLeft(); capture("52-photo-drafts-scrolled-preview", app: app)
+        app.terminate(); app.launchArguments = ["--demo", "--attachment-draft-demo"]; app.launch()
+        app.staticTexts["Build a native iOS client"].tap()
+        expectation(for: NSPredicate(format: "count == %d", count), evaluatedWith: remove)
+        waitForExpectations(timeout: 10)
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        app.staticTexts["Review the reconnect behavior"].tap()
+        XCTAssertFalse(chips.exists, "Photo drafts belong to their original conversation.")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        app.staticTexts["Build a native iOS client"].tap()
+        expectation(for: NSPredicate(format: "count == %d", count), evaluatedWith: remove)
+        waitForExpectations(timeout: 10)
+        capture("53-photo-drafts-after-relaunch-preview", app: app)
+        for remaining in (1...count).reversed() {
+            remove.firstMatch.tap()
+            expectation(for: NSPredicate(format: "count == %d", remaining - 1), evaluatedWith: remove)
+            waitForExpectations(timeout: 5)
+        }
+        capture("54-photo-drafts-removed-preview", app: app)
+    }
+    func testPhotoSizeLimitAndRecoveryWhenFixtureProvided() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard env["T3_NATIVE_PHOTO_LIMIT_FIXTURE"] == "1" || env["TEST_RUNNER_T3_NATIVE_PHOTO_LIMIT_FIXTURE"] == "1" else {
+            throw XCTSkip("Seed the oversized photo fixture as the newest image.")
+        }
+        let app = XCUIApplication(); app.launchArguments = ["--demo", "--attachment-draft-demo", "--reset-demo-attachments"]; app.launch()
+        app.staticTexts["Build a native iOS client"].tap()
+        let attach = app.buttons["attach-files"]
+        expectation(for: NSPredicate(format: "enabled == true"), evaluatedWith: attach); waitForExpectations(timeout: 5)
+        attach.tap(); app.buttons["Choose photos"].tap()
+        let photos = app.images.matching(identifier: "PXGGridLayout-Info")
+        XCTAssertTrue(photos.firstMatch.waitForExistence(timeout: 30))
+        photos.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        app.buttons["Done"].tap()
+        let error = app.staticTexts["Choose a photo no larger than 10 MiB."]
+        XCTAssertTrue(error.waitForExistence(timeout: 20))
+        XCTAssertFalse(app.scrollViews["draft-attachments"].exists)
+        capture("55-photo-size-limit-preview", app: app)
+        app.buttons["Dismiss attachment error"].tap()
+        attach.tap(); app.buttons["Choose photos"].tap()
+        XCTAssertTrue(photos.firstMatch.waitForExistence(timeout: 30))
+        photos.element(boundBy: 1).coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        app.buttons["Done"].tap()
+        let chips = app.scrollViews["draft-attachments"]
+        XCTAssertTrue(chips.waitForExistence(timeout: 20)); XCTAssertFalse(error.exists)
+        capture("56-photo-size-limit-recovered-preview", app: app)
+        chips.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Remove ")).firstMatch.tap()
+    }
     func testAttachmentDraftRestoresAndUsesNativeFilesPickerWithPreviewData() {
         let app = XCUIApplication()
         app.launchArguments = ["--demo", "--attachment-draft-demo", "--reset-demo-draft", "--reset-demo-attachments"]
@@ -323,6 +403,15 @@ import XCTest
         app.buttons["model-settings"].tap()
         XCTAssertTrue(app.navigationBars["Model"].waitForExistence(timeout: 5))
         capture("12-live-model-catalog", app: app)
+        app.buttons["Cancel"].tap()
+        app.buttons["attach-files"].tap()
+        XCTAssertTrue(app.buttons["Choose photos"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Choose files"].exists)
+        XCTAssertFalse(app.buttons["Sample image"].exists)
+        capture("57-live-attachment-sources", app: app)
+        app.buttons["Choose photos"].tap()
+        XCTAssertTrue(app.images.matching(identifier: "PXGGridLayout-Info").firstMatch.waitForExistence(timeout: 30))
+        capture("58-live-host-photo-picker-fixture-library", app: app)
         app.buttons["Cancel"].tap()
         messageInput(app).tap()
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))

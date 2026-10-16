@@ -68,7 +68,9 @@ jobs:
         run: |
           xcrun simctl bootstatus "$NATIVE_SIMULATOR_ID" -b
           xcrun simctl ui "$NATIVE_SIMULATOR_ID" appearance dark
-          xcodebuild -project T3Native.xcodeproj -scheme T3NativeUI \
+          swift Scripts/create-photo-test-fixtures.swift build/PhotoFixtures
+          xcrun simctl addmedia "$NATIVE_SIMULATOR_ID" "build/PhotoFixtures/T3 Photo Fixture 1.png" "build/PhotoFixtures/T3 Photo Fixture 2.jpeg"
+          TEST_RUNNER_T3_NATIVE_PHOTO_FIXTURE_COUNT=2 xcodebuild -project T3Native.xcodeproj -scheme T3NativeUI \
             -destination "platform=iOS Simulator,id=$NATIVE_SIMULATOR_ID" \
             -derivedDataPath build/DerivedData -resultBundlePath build/ui.xcresult \
             -parallel-testing-enabled NO -jobs 2 -collect-test-diagnostics never CODE_SIGNING_ALLOWED=NO \
@@ -83,7 +85,8 @@ jobs:
             -only-testing:T3NativeUITests/NativeFlowTests/testAttachmentDraftRestoresAndUsesNativeFilesPickerWithPreviewData \
             -only-testing:T3NativeUITests/NativeFlowTests/testRemovingOneServerPreservesTheOtherWithPreviewData \
             -only-testing:T3NativeUITests/NativeFlowTests/testUnassignedLegacyDraftsRemainVisibleAfterServerRemovalWithPreviewData \
-            -only-testing:T3NativeUITests/NativeFlowTests/testFailedDraftCleanupKeepsServerAvailableWithPreviewData test
+            -only-testing:T3NativeUITests/NativeFlowTests/testFailedDraftCleanupKeepsServerAvailableWithPreviewData \
+            -only-testing:T3NativeUITests/NativeFlowTests/testNativePhotosPickerWithPreviewData test
       - uses: actions/upload-artifact@v4
         if: always()
         with:

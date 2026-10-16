@@ -9,7 +9,13 @@ case "$action" in
     device="${2:?Pass an existing idle iOS Simulator UDID}"
     scheme=T3Native
     operation="$action"
-    if [[ "$action" == ui-test ]]; then scheme=T3NativeUI; operation=test; fi
+    if [[ "$action" == ui-test ]]; then
+      scheme=T3NativeUI; operation=test
+      xcrun simctl bootstatus "$device" -b
+      swift Scripts/create-photo-test-fixtures.swift build/PhotoFixtures
+      xcrun simctl addmedia "$device" "build/PhotoFixtures/T3 Photo Fixture 1.png" "build/PhotoFixtures/T3 Photo Fixture 2.jpeg"
+      export TEST_RUNNER_T3_NATIVE_PHOTO_FIXTURE_COUNT=2
+    fi
     xcodebuild -project T3Native.xcodeproj -scheme "$scheme" \
       -destination "platform=iOS Simulator,id=$device" -derivedDataPath build/DerivedData \
       -parallel-testing-enabled NO -jobs 2 CODE_SIGNING_ALLOWED=NO "$operation"

@@ -1,5 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import PhotosUI
 
 struct ConversationScreen: View {
     @Bindable var store: AppStore
@@ -13,6 +14,10 @@ struct ConversationScreen: View {
     @State private var previewRequest: AttachmentPreviewRequest?
     @State private var attachmentDraft = ComposerAttachmentDraft()
     @State private var showFileImporter = false
+    @State private var showPhotoPicker = false
+    @State private var selectedPhotos: [PhotosPickerItem] = []
+    @State private var photoImportKey = ""
+    @State private var photoImportLimits = AttachmentLimits(uploads: false, fileMaximum: nil)
     @State private var importKey = ""
     @State private var importLimits = AttachmentLimits(uploads: false, fileMaximum: nil)
     @FocusState private var focused: Bool
@@ -71,7 +76,15 @@ struct ConversationScreen: View {
             case .failure(let error): attachmentDraft.error = error.localizedDescription
             }
         }
-        .onChange(of: store.activeHostID) { _, _ in previewRequest = nil; showFileImporter = false }
+        .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotos,
+                      maxSelectionCount: max(1, 100 - attachmentDraft.items.count), selectionBehavior: .ordered,
+                      matching: .images, preferredItemEncoding: .compatible)
+        .task(id: selectedPhotos) {
+            guard !selectedPhotos.isEmpty else { return }
+            await attachmentDraft.addPhotos(selectedPhotos, limits: photoImportLimits, expectedKey: photoImportKey)
+            selectedPhotos = []
+        }
+        .onChange(of: store.activeHostID) { _, _ in previewRequest = nil; showFileImporter = false; showPhotoPicker = false; selectedPhotos = [] }
         .task(id: draftKey) {
             draft = UserDefaults.standard.string(forKey: draftKey) ?? ""
             draftModel = UserDefaults.standard.data(forKey: draftKey + ".model").flatMap { try? JSONValue.decode($0) }
@@ -95,7 +108,7 @@ struct ConversationScreen: View {
             if let value, let data = try? value.data() { UserDefaults.standard.set(data, forKey: draftKey + ".model") }
             else { UserDefaults.standard.removeObject(forKey: draftKey + ".model") }
         }
-        .onDisappear { Task { await store.closeConversation(expectedID: threadID) } }
+        .onDisappear { selectedPhotos = []; Task { await store.closeConversation(expectedID: threadID) } }
     }
 
     private func timeline(_ detail: Conversation) -> some View {
@@ -225,6 +238,9 @@ struct ConversationScreen: View {
                 }
                 HStack(spacing: 8) {
                     Menu {
+                        Button("Choose photos", systemImage: "photo") {
+                            focused = false; photoImportKey = attachmentKey; photoImportLimits = AttachmentLimits(config: store.config); showPhotoPicker = true
+                        }.disabled(attachmentDraft.items.count >= 100)
                         Button("Choose files", systemImage: "folder") {
                             focused = false; importKey = attachmentKey; importLimits = AttachmentLimits(config: store.config); showFileImporter = true
                         }
