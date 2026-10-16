@@ -2,9 +2,21 @@ import SwiftUI
 import QuickLook
 
 struct AttachmentPreviewRequest: Identifiable {
+    enum Source {
+        case sent(AttachmentReference)
+        case draft(DraftAttachment, key: String)
+    }
     let id = UUID()
-    let attachment: AttachmentReference
+    let source: Source
     let hostID: UUID?
+    init(attachment: AttachmentReference, hostID: UUID?) { source = .sent(attachment); self.hostID = hostID }
+    init(draft: DraftAttachment, key: String, hostID: UUID?) { source = .draft(draft, key: key); self.hostID = hostID }
+    var name: String {
+        switch source {
+        case .sent(let attachment): attachment.displayName
+        case .draft(let attachment, _): attachment.name
+        }
+    }
 }
 
 struct AttachmentPreviewScreen: View {
@@ -29,7 +41,7 @@ struct AttachmentPreviewScreen: View {
                         } else { ProgressView("Loading attachment") }
                     }.padding(24).frame(maxWidth: .infinity, maxHeight: .infinity)
                         .background(theme.canvas).foregroundStyle(theme.text)
-                        .navigationTitle(request.attachment.displayName).navigationBarTitleDisplayMode(.inline)
+                        .navigationTitle(request.name).navigationBarTitleDisplayMode(.inline)
                         .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
                 }
             }
@@ -37,7 +49,11 @@ struct AttachmentPreviewScreen: View {
         .task(id: revision) {
             error = nil
             do {
-                let loaded = try await store.previewAttachment(request.attachment, hostID: request.hostID)
+                let loaded: AttachmentPreviewFile
+                switch request.source {
+                case .sent(let attachment): loaded = try await store.previewAttachment(attachment, hostID: request.hostID)
+                case .draft(let attachment, let key): loaded = try await AttachmentDraftStore.shared.previewFile(id: attachment.id, key: key)
+                }
                 guard !Task.isCancelled else { return }
                 file = loaded
             } catch {

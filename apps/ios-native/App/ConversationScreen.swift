@@ -205,7 +205,11 @@ struct ConversationScreen: View {
                 }.padding(.horizontal, 4)
             }
             VStack(alignment: .leading, spacing: 12) {
-                if !attachmentDraft.items.isEmpty { ComposerAttachmentChips(draft: attachmentDraft, disabled: store.sending || attachmentDraft.busy) }
+                if !attachmentDraft.items.isEmpty {
+                    ComposerAttachmentChips(draft: attachmentDraft, disabled: store.sending || attachmentDraft.busy) { item in
+                        previewRequest = AttachmentPreviewRequest(draft: item, key: attachmentDraft.key, hostID: store.activeHostID)
+                    }
+                }
                 if store.uploadDraftKey == attachmentKey, let name = store.uploadingName {
                     HStack(spacing: 8) {
                         ProgressView(value: store.uploadFraction).frame(width: 36)

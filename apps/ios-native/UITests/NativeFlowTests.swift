@@ -328,6 +328,41 @@ import XCTest
         capture("56-photo-size-limit-recovered-preview", app: app)
         chips.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Remove ")).firstMatch.tap()
     }
+    func testUnsentAttachmentsOpenLocalNativePreviewsWithPreviewData() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--demo", "--attachment-draft-demo", "--reset-demo-draft", "--reset-demo-attachments"]
+        app.launch(); app.staticTexts["Build a native iOS client"].tap()
+        let attach = app.buttons["attach-files"]
+        expectation(for: NSPredicate(format: "enabled == true"), evaluatedWith: attach)
+        waitForExpectations(timeout: 5)
+        attach.tap(); app.buttons["Sample text"].tap()
+        let text = app.buttons["Preview draft Composer notes.txt"]
+        XCTAssertTrue(text.waitForExistence(timeout: 5))
+        attach.tap(); app.buttons["Sample image"].tap()
+        let image = app.buttons["Preview draft Composer image.png"]
+        XCTAssertTrue(image.waitForExistence(timeout: 5))
+        capture("59-unsent-attachment-buttons-preview", app: app)
+        text.tap()
+        XCTAssertTrue(app.buttons["Done"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Native T3 attachment draft")).firstMatch.waitForExistence(timeout: 10))
+        capture("60-unsent-native-text-preview", app: app)
+        app.buttons["Done"].tap()
+        XCTAssertTrue(text.waitForExistence(timeout: 5))
+        image.tap()
+        XCTAssertTrue(app.buttons["Done"].waitForExistence(timeout: 10))
+        capture("61-unsent-native-image-preview", app: app)
+        app.buttons["Done"].tap()
+        XCTAssertTrue(image.waitForExistence(timeout: 5))
+        app.terminate(); app.launchArguments = ["--demo", "--attachment-draft-demo"]; app.launch()
+        app.staticTexts["Build a native iOS client"].tap()
+        XCTAssertTrue(text.waitForExistence(timeout: 5)); XCTAssertTrue(image.exists)
+        capture("62-draft-preserved-after-previews-preview", app: app)
+        text.tap()
+        XCTAssertTrue(app.buttons["Done"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["Share"].firstMatch.waitForExistence(timeout: 5))
+        app.buttons["Share"].firstMatch.tap()
+        capture("63-unsent-native-share-preview", app: app)
+    }
     func testAttachmentDraftRestoresAndUsesNativeFilesPickerWithPreviewData() {
         let app = XCUIApplication()
         app.launchArguments = ["--demo", "--attachment-draft-demo", "--reset-demo-draft", "--reset-demo-attachments"]

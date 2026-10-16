@@ -73,17 +73,22 @@ import PhotosUI
 struct ComposerAttachmentChips: View {
     let draft: ComposerAttachmentDraft
     let disabled: Bool
+    let preview: (DraftAttachment) -> Void
     @Environment(\.t3Theme) private var theme
     var body: some View {
         ScrollView(.horizontal) {
             HStack(spacing: 8) {
                 ForEach(draft.items) { item in
                     HStack(spacing: 6) {
-                        Image(systemName: item.type == "image" ? "photo" : "doc")
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(item.name).lineLimit(1)
-                            Text(ByteCountFormatter.string(fromByteCount: Int64(item.sizeBytes), countStyle: .file)).foregroundStyle(.secondary)
-                        }
+                        Button { preview(item) } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: item.type == "image" ? "photo" : "doc")
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(item.name).lineLimit(1)
+                                    Text(ByteCountFormatter.string(fromByteCount: Int64(item.sizeBytes), countStyle: .file)).foregroundStyle(.secondary)
+                                }
+                            }.contentShape(.rect)
+                        }.buttonStyle(.plain).accessibilityLabel("Preview draft \(item.name)")
                         Button { Task { await draft.remove(item) } } label: { Image(systemName: "xmark.circle.fill").frame(width: 28, height: 32).contentShape(.rect) }
                             .accessibilityLabel("Remove \(item.name)").disabled(disabled)
                     }.font(T3Font.caption).padding(8)

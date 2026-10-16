@@ -12,6 +12,62 @@ final class ComposerAttachmentTests: XCTestCase {
     private func item(type: String, bytes: Int, mime: String = "text/plain") -> DraftAttachment {
         DraftAttachment(id: UUID().uuidString, name: "File", mimeType: mime, type: type, sizeBytes: bytes)
     }
+    func testDraftPreviewOwnsSnapshotAndPreservesSendState() async throws {
+        let store = AttachmentDraftStore(root: storeRoot()), source = try sample()
+        let key = "preview/thread"
+        let imported = try await store.importFile(source.url, key: key, limits: limits)
+        let item = try XCTUnwrap(imported.first)
+        try await store.markUploaded(item, uploadID: "pending_preview", key: key)
+        let attempt = try await store.attempt(key: key, text: "Send", model: nil, attachments: imported)
+        var preview: AttachmentPreviewFile? = try await store.previewFile(id: item.id, key: key)
+        let url = try XCTUnwrap(preview?.url)
+        let durable = try await store.uploadFile(item, key: key)
+        XCTAssertNotEqual(url, durable)
+        XCTAssertEqual(url.lastPathComponent, "Notes.txt")
+        XCTAssertEqual(try Data(contentsOf: url), try Data(contentsOf: durable))
+        try Data("Edited preview".utf8).write(to: url)
+        XCTAssertEqual(try Data(contentsOf: durable), Data("Native T3 upload\n".utf8))
+        let saved = try await store.items(key: key)
+        XCTAssertEqual(saved.first?.uploadedID, "pending_preview")
+        let retried = try await store.attempt(key: key, text: "Send", model: nil, attachments: saved)
+        XCTAssertEqual(retried, attempt)
+        _ = try await store.remove(ids: [item.id], key: key)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path), "An open preview survives confirmed-send or draft removal.")
+        preview = nil
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.deletingLastPathComponent().path))
+        withExtendedLifetime(source) {}
+    }
+    func testDraftPreviewRejectsOtherDraftAndRemovedOrChangedFiles() async throws {
+        let store = AttachmentDraftStore(root: storeRoot()), source = try sample()
+        let items = try await store.importFile(source.url, key: "original", limits: limits)
+        let item = try XCTUnwrap(items.first)
+        do { _ = try await store.previewFile(id: item.id, key: "other"); XCTFail("Another draft must not expose this attachment") }
+        catch { XCTAssertTrue(error is ClientError) }
+        let durable = try await store.uploadFile(item, key: "original")
+        try Data("Changed".utf8).write(to: durable)
+        do { _ = try await store.previewFile(id: item.id, key: "original"); XCTFail("Changed bytes must not be previewed") }
+        catch { XCTAssertTrue(error is ClientError) }
+        _ = try await store.remove(ids: [item.id], key: "original")
+        do { _ = try await store.previewFile(id: item.id, key: "original"); XCTFail("Removed attachment accepted") }
+        catch { XCTAssertEqual(error.localizedDescription, "This attachment was removed from the draft.") }
+        withExtendedLifetime(source) {}
+    }
+    func testCancellingDraftPreviewLeavesTheDurableCopy() async throws {
+        let store = AttachmentDraftStore(root: storeRoot()), source = try sample()
+        let items = try await store.importFile(source.url, key: "cancel", limits: limits)
+        let item = try XCTUnwrap(items.first)
+        let task = Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return try await store.previewFile(id: item.id, key: "cancel")
+        }
+        do { _ = try await task.value; XCTFail("Cancelled preview completed") }
+        catch { XCTAssertTrue(error is CancellationError) }
+        let durable = try await store.uploadFile(item, key: "cancel")
+        XCTAssertEqual(try Data(contentsOf: durable), Data("Native T3 upload\n".utf8))
+        _ = try await store.remove(ids: [item.id], key: "cancel")
+        withExtendedLifetime(source) {}
+    }
     func testImportedBytesAndUploadedReferencesSurviveRestoringTheDraft() async throws {
         let root = storeRoot(), store = AttachmentDraftStore(root: root)
         let source = try sample()

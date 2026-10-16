@@ -82,6 +82,7 @@ jobs:
             -only-testing:T3NativeUITests/NativeFlowTests/testLongMessageHistoryAnchorWithPreviewData \
             -only-testing:T3NativeUITests/NativeFlowTests/testHistoryRetryAndFinalPageWithPreviewData \
             -only-testing:T3NativeUITests/NativeFlowTests/testNativeAttachmentPreviewWithPreviewData \
+            -only-testing:T3NativeUITests/NativeFlowTests/testUnsentAttachmentsOpenLocalNativePreviewsWithPreviewData \
             -only-testing:T3NativeUITests/NativeFlowTests/testAttachmentDraftRestoresAndUsesNativeFilesPickerWithPreviewData \
             -only-testing:T3NativeUITests/NativeFlowTests/testRemovingOneServerPreservesTheOtherWithPreviewData \
             -only-testing:T3NativeUITests/NativeFlowTests/testUnassignedLegacyDraftsRemainVisibleAfterServerRemovalWithPreviewData \

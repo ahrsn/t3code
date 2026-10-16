@@ -169,6 +169,37 @@ actor AttachmentDraftStore {
         }
         return url
     }
+    func previewFile(id: String, key: String) throws -> AttachmentPreviewFile {
+        try Task.checkCancellation()
+        try checkAvailable(key)
+        guard let item = try read(key).items.first(where: { $0.id == id }) else {
+            throw ClientError("This attachment was removed from the draft.")
+        }
+        guard item.sizeBytes > 0, item.sizeBytes <= Int(AttachmentDownloads.maximumBytes) else {
+            throw ClientError("This attachment is too large to preview.")
+        }
+        let source = try uploadFile(item, key: key)
+        // Quick Look and sharing get a snapshot, never the durable upload source.
+        // Keep the copy on this actor so removal cannot interleave with its reads.
+        let reference = AttachmentReference(item.reference(id: item.id))
+        let preview = try AttachmentPreviewFile(name: reference.localName)
+        guard FileManager.default.createFile(atPath: preview.url.path, contents: nil,
+                                            attributes: [.protectionKey: FileProtectionType.complete]) else {
+            throw ClientError("The attachment could not be opened.")
+        }
+        let input = try FileHandle(forReadingFrom: source); defer { try? input.close() }
+        let output = try FileHandle(forWritingTo: preview.url); defer { try? output.close() }
+        var count = 0
+        while let data = try input.read(upToCount: 64 * 1024), !data.isEmpty {
+            try Task.checkCancellation()
+            count += data.count
+            guard count <= item.sizeBytes else { throw ClientError("The saved attachment changed. Remove it and attach the file again.") }
+            try output.write(contentsOf: data)
+        }
+        guard count == item.sizeBytes else { throw ClientError("The saved attachment changed. Remove it and attach the file again.") }
+        try Task.checkCancellation()
+        return preview
+    }
     func markUploaded(_ item: DraftAttachment, uploadID: String, key: String) throws {
         var manifest = try read(key)
         guard let index = manifest.items.firstIndex(where: { $0.id == item.id }) else { throw CancellationError() }
