@@ -50,10 +50,10 @@ jobs:
                   continue
               for device in devices:
                   if 'iPhone' in device['name'] and device['state'] == 'Shutdown':
-                      candidates.append((version, device['udid']))
+                      candidates.append((version, device['name'] == 'iPhone 17 Pro', device['udid']))
           if not candidates:
               raise SystemExit('No idle iOS 26+ iPhone simulator is available.')
-          print('NATIVE_SIMULATOR_ID=' + sorted(candidates, reverse=True)[0][1])
+          print('NATIVE_SIMULATOR_ID=' + sorted(candidates, reverse=True)[0][2])
           PY
       - name: Unit tests
         working-directory: apps/ios-native
@@ -62,7 +62,7 @@ jobs:
           xcodebuild -project T3Native.xcodeproj -scheme T3Native \
             -destination "platform=iOS Simulator,id=$NATIVE_SIMULATOR_ID" \
             -derivedDataPath build/DerivedData -resultBundlePath build/unit.xcresult \
-            -parallel-testing-enabled NO -jobs 2 CODE_SIGNING_ALLOWED=NO test
+            -parallel-testing-enabled NO -jobs 2 -collect-test-diagnostics never CODE_SIGNING_ALLOWED=NO test
       - name: Preview UI flow
         working-directory: apps/ios-native
         run: |
@@ -71,7 +71,7 @@ jobs:
           xcodebuild -project T3Native.xcodeproj -scheme T3NativeUI \
             -destination "platform=iOS Simulator,id=$NATIVE_SIMULATOR_ID" \
             -derivedDataPath build/DerivedData -resultBundlePath build/ui.xcresult \
-            -parallel-testing-enabled NO -jobs 2 CODE_SIGNING_ALLOWED=NO \
+            -parallel-testing-enabled NO -jobs 2 -collect-test-diagnostics never CODE_SIGNING_ALLOWED=NO \
             -only-testing:T3NativeUITests/NativeFlowTests/testNativeAppearanceAndConversationWithPreviewData \
             -only-testing:T3NativeUITests/NativeFlowTests/testUpstreamThemeVariantsWithPreviewData \
             -only-testing:T3NativeUITests/NativeFlowTests/testModelOptionsAndProviderDraftWithPreviewData \

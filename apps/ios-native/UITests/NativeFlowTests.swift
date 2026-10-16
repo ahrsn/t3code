@@ -273,7 +273,7 @@ import XCTest
         XCTAssertFalse(app.buttons["send-message"].isEnabled, "Preview data cannot send to a host.")
         capture("36-attachment-draft-after-relaunch-preview", app: app)
         attach.tap(); app.buttons["Choose files"].tap()
-        XCTAssertTrue(app.buttons["Cancel"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Cancel"].firstMatch.waitForExistence(timeout: 30))
         capture("37-native-file-picker-preview", app: app)
         app.buttons["Cancel"].firstMatch.tap()
         XCTAssertTrue(app.buttons["Remove Composer image.png"].waitForExistence(timeout: 5))

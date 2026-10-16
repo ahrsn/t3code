@@ -78,7 +78,7 @@ struct ConversationScreen: View {
             viewport.frames.removeAll()
             await attachmentDraft.load(key: attachmentKey)
             #if DEBUG
-            if store.isDemo && ProcessInfo.processInfo.arguments.contains("--reset-demo-attachments") {
+            if store.isDemo && (ProcessInfo.processInfo.arguments.contains("--reset-demo-attachments") || ProcessInfo.processInfo.arguments.contains("--reset-demo-draft")) {
                 for item in attachmentDraft.items { await attachmentDraft.remove(item) }
             }
             #endif
