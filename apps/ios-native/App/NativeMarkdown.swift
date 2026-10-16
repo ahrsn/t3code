@@ -110,6 +110,7 @@ struct CodeBlock: View {
     let code: String
     let language: String
     let pointSize: Double
+    var maximumTextHeight: Double? = nil
     @State private var copied = false
     @Environment(\.t3Theme) private var theme
     var body: some View {
@@ -121,9 +122,12 @@ struct CodeBlock: View {
                     UIPasteboard.general.string = code; copied = true
                 }.font(T3Font.caption).buttonStyle(.borderless)
             }
-            ScrollView(.horizontal) {
+            ScrollView(maximumTextHeight == nil ? [.horizontal] : [.horizontal, .vertical]) {
                 Text(code).font(.custom("Menlo-Regular", fixedSize: pointSize)).textSelection(.enabled).fixedSize(horizontal: true, vertical: false)
             }
+            .frame(height: maximumTextHeight.map { maximum in
+                min(maximum, Double(code.utf8.reduce(1) { $1 == 10 ? $0 + 1 : $0 }) * pointSize * 1.35)
+            })
         }
         .padding(12).background(theme.color("codeBackground"), in: .rect(cornerRadius: 12))
     }

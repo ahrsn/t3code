@@ -51,6 +51,7 @@ struct ComposerSendConfirmation: Equatable {
     var pendingActions: Set<String> = []
     #if DEBUG
     @ObservationIgnored var demoAttachmentAttempts: Set<String> = []
+    @ObservationIgnored var demoToolAttempts: Set<String> = []
     #endif
     @ObservationIgnored private let authenticator = HostAuthenticator()
     @ObservationIgnored let attachmentDraftStore: AttachmentDraftStore
@@ -323,6 +324,20 @@ struct ComposerSendConfirmation: Equatable {
         let file = try await AttachmentDownloads().download(url: url, attachment: attachment)
         guard activeHostID == hostID else { throw CancellationError() }
         return file
+    }
+    func loadTurnItem(_ item: JSONValue, threadID: String, hostID: UUID?) async throws -> JSONValue {
+        try Task.checkCancellation()
+        guard let detail = conversation, detail.id == threadID,
+              let target = detail.projection.target(for: item.id) else { throw CancellationError() }
+        #if DEBUG
+        if isDemo { return try ToolFixtures.detail(item, attempts: &demoToolAttempts) }
+        #endif
+        guard connected, activeHostID == hostID, hostID != nil else { throw ClientError("Reconnect to this server to load output.") }
+        let generation = connectionGeneration
+        let result = try await transport.call("orchestration.getTurnItem", payload: target.payload(revision: item["updatedAt"].string))
+        try Task.checkCancellation()
+        guard conversation === detail, activeHostID == hostID, connectionGeneration == generation else { throw CancellationError() }
+        return try target.validate(result, type: item["type"].string)
     }
     func loadHistory(expectedID: String? = nil, beforeApplying: () -> Void = {}) async -> Bool {
         if let expectedID, conversation?.id != expectedID { return false }

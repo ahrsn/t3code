@@ -41,6 +41,37 @@ import Observation
         print("NATIVE_PHONE_RECONNECTED_DETAIL")
 
     }
+    func testReadToolDetailFromSavedRealHostWhenRequested() async throws {
+        let env = ProcessInfo.processInfo.environment
+        guard env["T3_NATIVE_REUSE_SAVED_HOST"] == "1" || env["TEST_RUNNER_T3_NATIVE_REUSE_SAVED_HOST"] == "1" else { throw XCTSkip("Opt-in real-host tool detail read.") }
+        let store = AppStore()
+        store.connect(try XCTUnwrap(store.activeHost))
+        let (events, continuation) = AsyncStream<Result<Bool, ClientError>>.makeStream()
+        let observer = ConnectionObserver(store: store, continuation: continuation)
+        observer.observe()
+        let deadline = Task { try await Task.sleep(for: .seconds(30)); continuation.finish() }
+        defer { deadline.cancel(); store.disconnect(); withExtendedLifetime(observer) {} }
+        for await event in events { _ = try event.get() }
+        let index = ThreadIndex(threads: store.threads)
+        for thread in (index.pinned + index.working + index.settled).prefix(3) {
+            await store.selectThread(thread.id)
+            try await waitForDetail(store, id: thread.id)
+            guard let detail = store.conversation else { continue }
+            for row in detail.rows.reversed().filter({ ["command_execution", "dynamic_tool"].contains($0.type) }).prefix(4) {
+                do {
+                    let item = try await store.loadTurnItem(row.value, threadID: thread.id, hostID: store.activeHostID)
+                    XCTAssertEqual(item["type"].string, row.type)
+                    XCTAssertEqual(item.id, detail.projection.target(for: row.id)?.itemID)
+                    XCTAssertFalse(item["outputOmitted"].bool)
+                    let document = await ToolDocuments.shared.document(for: item)
+                    XCTAssertFalse(document.sections.isEmpty)
+                    print("NATIVE_REAL_TOOL_DETAIL type=\(row.type) sections=\(document.sections.count)")
+                    return
+                } catch let error as ClientError where error.message == "Output is no longer available." { continue }
+            }
+        }
+        throw XCTSkip("No retained command/tool output among the sampled rows.")
+    }
     func testLoadEarlierFromSavedRealHostWhenRequested() async throws {
         let env = ProcessInfo.processInfo.environment
         guard env["T3_NATIVE_REUSE_SAVED_HOST"] == "1" || env["TEST_RUNNER_T3_NATIVE_REUSE_SAVED_HOST"] == "1" else { throw XCTSkip("Opt-in real-host history read.") }

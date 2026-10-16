@@ -78,6 +78,7 @@ jobs:
             -only-testing:T3NativeUITests/NativeFlowTests/testUpstreamThemeVariantsWithPreviewData \
             -only-testing:T3NativeUITests/NativeFlowTests/testModelOptionsAndProviderDraftWithPreviewData \
             -only-testing:T3NativeUITests/NativeFlowTests/testNativeMarkdownWithPreviewData \
+            -only-testing:T3NativeUITests/NativeFlowTests/testNativeToolDetailsWithPreviewData \
             -only-testing:T3NativeUITests/NativeFlowTests/testEarlierHistoryKeepsReadingPositionWithPreviewData \
             -only-testing:T3NativeUITests/NativeFlowTests/testLongMessageHistoryAnchorWithPreviewData \
             -only-testing:T3NativeUITests/NativeFlowTests/testHistoryRetryAndFinalPageWithPreviewData \

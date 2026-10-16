@@ -144,7 +144,11 @@ struct ConversationScreen: View {
                                     RequestRow(row: row, request: request, store: store, threadID: threadID)
                                 }
                             } else {
-                                TimelineRowView(row: row, pointSize: messageSize) { attachment in
+                                TimelineRowView(row: row, pointSize: messageSize,
+                                                contextID: "\(store.activeHostID?.uuidString ?? "none").\(threadID)",
+                                                loadTool: { [hostID = store.activeHostID] item in
+                                    try await store.loadTurnItem(item, threadID: threadID, hostID: hostID)
+                                }) { attachment in
                                     previewRequest = AttachmentPreviewRequest(attachment: attachment, hostID: store.activeHostID)
                                 }.equatable()
                             }
@@ -305,9 +309,15 @@ struct TimelineRowView: View, Equatable {
     let row: TimelineRow
     let pointSize: Double
     let openAttachment: (AttachmentReference) -> Void
+    let contextID: String
+    let loadTool: ((JSONValue) async throws -> JSONValue)?
     @Environment(\.t3Theme) private var theme
     @ScaledMetric(relativeTo: .body) private var dynamicScale = 1.0
-    nonisolated static func == (lhs: Self, rhs: Self) -> Bool { lhs.row == rhs.row && lhs.pointSize == rhs.pointSize }
+    init(row: TimelineRow, pointSize: Double, contextID: String = "", loadTool: ((JSONValue) async throws -> JSONValue)? = nil,
+         openAttachment: @escaping (AttachmentReference) -> Void) {
+        self.row = row; self.pointSize = pointSize; self.contextID = contextID; self.loadTool = loadTool; self.openAttachment = openAttachment
+    }
+    nonisolated static func == (lhs: Self, rhs: Self) -> Bool { lhs.row == rhs.row && lhs.pointSize == rhs.pointSize && lhs.contextID == rhs.contextID }
     var body: some View {
         if row.isMessage {
             VStack(alignment: .leading, spacing: 8) {
@@ -319,6 +329,8 @@ struct TimelineRowView: View, Equatable {
             .foregroundStyle(row.isUser ? theme.color("messageForeground") : theme.text)
             .background(row.isUser ? theme.color("messageSurface") : .clear, in: .rect(cornerRadius: 18))
             .textSelection(.enabled)
+        } else if ["command_execution", "dynamic_tool"].contains(row.type) {
+            ToolOutputRow(item: row.value, contextID: contextID, pointSize: pointSize * dynamicScale, load: loadTool)
         } else if row.type == "proposed_plan" {
             DisclosureGroup("Proposed plan") { NativeMarkdown(text: row.text, pointSize: pointSize * dynamicScale, streaming: row.value["streaming"].bool, preformatted: row.markdown) }
         } else if row.type == "todo_list" {

@@ -328,6 +328,47 @@ import XCTest
         capture("56-photo-size-limit-recovered-preview", app: app)
         chips.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Remove ")).firstMatch.tap()
     }
+    func testNativeToolDetailsWithPreviewData() {
+        let app = XCUIApplication(); app.launchArguments = ["--demo", "--tools-demo", "--reset-demo-draft"]; app.launch()
+        app.staticTexts["Build a native iOS client"].tap()
+        func tool(_ title: String) -> XCUIElement { app.buttons.matching(NSPredicate(format: "label CONTAINS %@", title)).firstMatch }
+        func outerScrollUp() {
+            let scroll = app.scrollViews["conversation-timeline"]
+            scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.01, dy: 0.85)).press(forDuration: 0.05,
+                thenDragTo: scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.01, dy: 0.2)))
+        }
+        XCTAssertTrue(tool("Inspect build result").waitForExistence(timeout: 10))
+        capture("64-native-tools-collapsed-preview", app: app)
+        tool("Inspect build result").tap()
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "includeWarnings")).firstMatch.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "artifact")).firstMatch.waitForExistence(timeout: 10))
+        capture("65-native-structured-tool-preview", app: app)
+        tool("Inspect build result").tap()
+        tool("Run native checks").tap()
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "All native checks passed")).firstMatch.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Exit 0"].exists)
+        app.buttons.matching(identifier: "Copy").element(boundBy: 1).tap()
+        XCTAssertTrue(app.buttons["Copied"].firstMatch.waitForExistence(timeout: 5))
+        capture("66-native-full-command-output-preview", app: app)
+        tool("Run native checks").tap()
+        tool("Retry failed command output").tap()
+        XCTAssertTrue(app.buttons["Retry output"].waitForExistence(timeout: 10))
+        capture("67-native-tool-error-preview", app: app)
+        app.buttons["Retry output"].tap()
+        XCTAssertTrue(app.staticTexts["Exit 1"].waitForExistence(timeout: 10))
+        capture("68-native-tool-error-recovered-preview", app: app)
+        tool("Retry failed command output").tap()
+        tool("Read a long result").tap()
+        let limit = app.staticTexts["Showing a shortened result. Copy includes only the displayed portion."]
+        XCTAssertTrue(limit.waitForExistence(timeout: 10))
+        for _ in 0..<4 { if limit.isHittable { break }; outerScrollUp() }
+        XCTAssertTrue(limit.isHittable)
+        capture("69-native-bounded-tool-output-preview", app: app)
+        tool("Read a long result").tap()
+        tool("Removed output").tap()
+        XCTAssertTrue(app.staticTexts["Output is no longer available."].waitForExistence(timeout: 10))
+        capture("70-native-missing-tool-output-preview", app: app)
+    }
     func testUnsentAttachmentsOpenLocalNativePreviewsWithPreviewData() {
         let app = XCUIApplication()
         app.launchArguments = ["--demo", "--attachment-draft-demo", "--reset-demo-draft", "--reset-demo-attachments"]

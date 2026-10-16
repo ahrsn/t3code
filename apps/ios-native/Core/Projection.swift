@@ -19,6 +19,7 @@ struct TimelineRow: Identifiable, Equatable, Sendable {
 struct ThreadProjection: Sendable {
     var thread: JSONValue = .null
     var items: [String: JSONValue] = [:]
+    var itemSources: [String: TurnItemTarget] = [:]
     var itemOrder: [String] = []
     var requests: [String: JSONValue] = [:]
     var runs: [String: JSONValue] = [:]
@@ -31,12 +32,15 @@ struct ThreadProjection: Sendable {
         if stream["kind"].string == "snapshot" {
             let projection = stream["projection"]
             thread = projection["thread"]
-            items = [:]; itemOrder = []
+            items = [:]; itemOrder = []; itemSources = [:]
             let visible = projection["visibleTurnItems"].array
             // Visible rows include inherited history from forked provider threads.
             for wrapper in visible.sorted(by: { $0["position"].int < $1["position"].int }) {
                 let item = wrapper["item"]
-                if !item.id.isEmpty, items[item.id] == nil { itemOrder.append(item.id); items[item.id] = item }
+                if !item.id.isEmpty, items[item.id] == nil {
+                    itemOrder.append(item.id); items[item.id] = item
+                    itemSources[item.id] = TurnItemTarget(item: item, wrapper: wrapper, threadID: thread.id)
+                }
             }
             if visible.isEmpty {
                 for item in projection["turnItems"].array where !item.id.isEmpty && items[item.id] == nil {
@@ -80,7 +84,10 @@ struct ThreadProjection: Sendable {
         var earlier: [String] = []
         for wrapper in page["items"].array {
             let item = wrapper["item"].isNull ? wrapper : wrapper["item"]
-            if !item.id.isEmpty, items[item.id] == nil { items[item.id] = item; earlier.append(item.id) }
+            if !item.id.isEmpty, items[item.id] == nil {
+                items[item.id] = item; earlier.append(item.id)
+                itemSources[item.id] = TurnItemTarget(item: item, wrapper: wrapper, threadID: thread.id)
+            }
         }
         itemOrder = earlier + itemOrder
         hasMoreHistory = page["hasMoreHistory"].bool
@@ -89,6 +96,10 @@ struct ThreadProjection: Sendable {
 
     var rows: [TimelineRow] {
         itemOrder.compactMap { items[$0].map { TimelineRow(value: $0) } }
+    }
+    func target(for itemID: String) -> TurnItemTarget? {
+        guard let item = items[itemID] else { return nil }
+        return itemSources[itemID] ?? TurnItemTarget(item: item, wrapper: .null, threadID: thread.id)
     }
     var pendingRequests: [JSONValue] { requests.values.filter { $0["status"].string == "pending" } }
 }

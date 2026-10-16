@@ -51,6 +51,7 @@ extension AppStore {
             ]
         }
         if ProcessInfo.processInfo.arguments.contains("--attachments-demo") { rows = AttachmentFixtures.rows }
+        if ProcessInfo.processInfo.arguments.contains("--tools-demo") { rows = ToolFixtures.rows }
         let historyDemo = ProcessInfo.processInfo.arguments.contains("--history-demo")
         if historyDemo { rows = HistoryFixtures.items(16..<24) }
         detail.apply(.object(["hasMoreHistory": .bool(historyDemo), "historyCursor": historyDemo ? .string("16") : .null, "kind": .string("snapshot"), "snapshotSequence": .number(10), "projection": .object([
