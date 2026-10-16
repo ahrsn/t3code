@@ -1,6 +1,12 @@
 import SwiftUI
 import Observation
 
+struct ComposerSendConfirmation: Equatable {
+    let id = UUID()
+    let draftKey: String
+    let text: String
+}
+
 @MainActor @Observable final class Conversation {
     let id: String
     var projection = ThreadProjection()
@@ -35,6 +41,11 @@ import Observation
     var isPairing = false
     var isDemo = false
     var sending = false
+    var composerSendTask: Task<Void, Never>?
+    var lastConfirmedSend: ComposerSendConfirmation?
+    var uploadingName: String?
+    var uploadDraftKey: String?
+    var uploadFraction = 0.0
     var conversation: Conversation?
     var pendingActions: Set<String> = []
     #if DEBUG
@@ -196,9 +207,13 @@ import Observation
         var fields = fields; fields["commandId"] = .string(UUID().uuidString)
         _ = try await transport.call("orchestration.dispatchCommand", payload: .object(fields))
     }
-    func send(text: String, threadID: String, model: JSONValue? = nil) async -> Bool {
-        guard !sending, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
-        sending = true; defer { sending = false }
+    func send(text: String, threadID: String, model: JSONValue? = nil, attachments: [DraftAttachment] = [], draftKey: String? = nil) async -> Bool {
+        guard !sending, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.isEmpty,
+              canOperate, let host = activeHost else { return false }
+        let rpc = transport
+        let generation = connectionGeneration
+        sending = true; uploadDraftKey = draftKey
+        defer { sending = false; uploadingName = nil; uploadDraftKey = nil; uploadFraction = 0 }
         do {
             if let model {
                 let projectID = shell.threads[threadID]?["projectId"].string ?? ""
@@ -206,17 +221,70 @@ import Observation
                     throw ClientError("This model is no longer available for this project. Choose another model before sending.")
                 }
             }
+            let attempt: AttachmentSendAttempt?
+            var references: [JSONValue] = []
+            if !attachments.isEmpty {
+                guard let draftKey else { throw ClientError("The attachment draft could not be loaded.") }
+                // Read saved upload IDs, including those retained by an earlier failed send.
+                let current = try await AttachmentDraftStore.shared.items(key: draftKey)
+                let ids = Set(attachments.map(\.id))
+                let selected = current.filter { ids.contains($0.id) }
+                guard selected.map(\.id) == attachments.map(\.id) else { throw ClientError("The attachments changed. Review the draft before sending.") }
+                try AttachmentLimits(config: config).validate(selected)
+                attempt = try await AttachmentDraftStore.shared.attempt(key: draftKey, text: text, model: model, attachments: selected)
+                for item in selected {
+                    try Task.checkCancellation()
+                    guard connectionGeneration == generation, activeHostID == host.id, canOperate else { throw ClientError("The connection changed. Your attachments are saved.") }
+                    uploadingName = item.name; uploadFraction = 0
+                    if let id = item.uploadedID {
+                        do {
+                            _ = try await rpc.call("assets.createUrl", payload: .object(["resource": .object(["_tag": .string("attachment"), "attachmentId": .string(id)])]))
+                            references.append(item.reference(id: id)); continue
+                        } catch {
+                            guard let failure = error as? RPCFailure, failure.contains(tag: "AssetAttachmentNotFoundError") else { throw error }
+                        }
+                    }
+                    let file = try await AttachmentDraftStore.shared.uploadFile(item, key: draftKey)
+                    var metadata = item.reference(id: "").object; metadata.removeValue(forKey: "id")
+                    let minted = try await rpc.call("attachments.createUploadUrl", payload: .object(metadata))
+                    let uploadID = minted["attachmentId"].string
+                    guard !uploadID.isEmpty, uploadID.count <= 128, uploadID.range(of: "^[a-zA-Z0-9_-]+$", options: .regularExpression) != nil else { throw ClientError("The server returned an invalid attachment ID.") }
+                    guard connectionGeneration == generation, activeHostID == host.id, canOperate else { throw ClientError("The connection changed. Your attachments are saved.") }
+                    let url = try AttachmentUploads.uploadURL(relative: minted["relativeUrl"].string, origin: host.origin)
+                    try await AttachmentUploads.upload(file: file, item: item, url: url) { [weak self] progress in
+                        Task { @MainActor in
+                            guard let self, self.connectionGeneration == generation else { return }
+                            self.uploadFraction = progress
+                        }
+                    }
+                    try await AttachmentDraftStore.shared.markUploaded(item, uploadID: uploadID, key: draftKey)
+                    references.append(item.reference(id: uploadID))
+                }
+            } else { attempt = nil }
+            uploadingName = nil
+            try Task.checkCancellation()
+            guard connectionGeneration == generation, activeHostID == host.id, canOperate else { throw ClientError("The connection changed. Your draft is saved.") }
             var fields: [String: JSONValue] = ["type": .string("message.dispatch"), "createdBy": .string("user"), "creationSource": .string("mobile"),
                                 "threadId": .string(threadID), "messageId": .string(UUID().uuidString), "text": .string(text),
-                                "attachments": .array([]), "deliveryIntent": .string("auto"),
+                                "attachments": .array(references), "deliveryIntent": .string("auto"),
                                 "dispatchMode": .object(["type": .string("queue_after_active")])]
             if let model {
                 let catalog = ModelCatalog(config: config, projectID: shell.threads[threadID]?["projectId"].string ?? "")
                 fields["modelSelection"] = catalog.selection(instanceID: model["instanceId"].string, modelID: model["model"].string, options: ModelCatalog.optionValues(model))
             }
-            try await dispatch(fields)
+            fields["commandId"] = .string(attempt?.commandID ?? UUID().uuidString)
+            if let attempt { fields["messageId"] = .string(attempt.messageID) }
+            _ = try await rpc.call("orchestration.dispatchCommand", payload: .object(fields))
+            if let draftKey, let attempt {
+                do { _ = try await AttachmentDraftStore.shared.remove(ids: Set(attachments.map(\.id)), key: draftKey, confirmedAttempt: attempt.commandID) }
+                catch { self.error = "Message sent, but the saved attachment copies could not be cleared: " + error.localizedDescription }
+            }
+            if let draftKey { lastConfirmedSend = ComposerSendConfirmation(draftKey: draftKey, text: text) }
             return true
-        } catch { self.error = error.localizedDescription; return false }
+        } catch {
+            if !Task.isCancelled, activeHostID == host.id { self.error = error.localizedDescription }
+            return false
+        }
     }
     func stop(_ threadID: String) async {
         do {

@@ -116,17 +116,92 @@ import Observation
         XCTFail(store.error ?? store.conversation?.error ?? "The open conversation did not reload.")
     }
 
+    func testSendNativeDraftAttachmentsOnIsolatedHostWhenProvided() async throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let link = env["T3_NATIVE_ATTACHMENT_PAIRING_URL"] ?? env["TEST_RUNNER_T3_NATIVE_ATTACHMENT_PAIRING_URL"],
+              try PairingTarget(link).origin.host == "127.0.0.1" else { throw XCTSkip("Opt-in isolated-host attachment send.") }
+        let (host, token) = try await HostAuthenticator().pair(target: PairingTarget(link), name: "Native attachment test")
+        let previous = UserDefaults.standard.string(forKey: "activeHost")
+        let store = AppStore()
+        try CredentialVault.save(token, for: host.id)
+        defer {
+            store.disconnect(); CredentialVault.remove(host.id)
+            if let previous { UserDefaults.standard.set(previous, forKey: "activeHost") }
+            else { UserDefaults.standard.removeObject(forKey: "activeHost") }
+        }
+        store.hosts.append(host); store.connect(host)
+        let (events, continuation) = AsyncStream<Result<Bool, ClientError>>.makeStream()
+        let observer = ConnectionObserver(store: store, continuation: continuation, requireConfig: true); observer.observe()
+        let deadline = Task { try await Task.sleep(for: .seconds(30)); continuation.finish() }
+        defer { deadline.cancel(); withExtendedLifetime(observer) {} }
+        for await event in events { _ = try event.get() }
+        XCTAssertTrue(store.connected)
+        let project = try XCTUnwrap(store.projects.first)
+        let provider = try XCTUnwrap(store.config["providers"].array.first { $0["driver"].string == "codex" })
+        let model = try XCTUnwrap(provider["models"].array.first { $0["isDefault"].bool } ?? provider["models"].array.first)
+        let selected = ModelCatalog(config: store.config, projectID: project.id).selection(instanceID: provider["instanceId"].string, modelID: model["slug"].string, options: [:])
+        let thread = try await store.createThread(project: project, title: "Native attachment send verification", model: selected)
+        await store.selectThread(thread); try await waitForDetail(store, id: thread)
+        let key = "isolated-attachment-send." + UUID().uuidString
+        let source = try AttachmentDraftFixtures.file(image: false), image = try AttachmentDraftFixtures.file(image: true)
+        let limits = AttachmentLimits(config: store.config)
+        _ = try await AttachmentDraftStore.shared.importFile(source.url, key: key, limits: limits)
+        let files = try await AttachmentDraftStore.shared.importFile(image.url, key: key, limits: limits)
+        var localURLs: [URL] = []
+        for file in files { localURLs.append(try await AttachmentDraftStore.shared.uploadFile(file, key: key)) }
+        let refused = await store.send(text: "Review these attachments.", threadID: thread, model: .object(["instanceId": .string("unavailable"), "model": .string("missing")]), attachments: files, draftKey: key)
+        XCTAssertFalse(refused)
+        let retained = try await AttachmentDraftStore.shared.items(key: key)
+        XCTAssertEqual(retained, files)
+        store.error = nil
+        let (responses, responseSink) = AsyncStream<Bool>.makeStream()
+        let responseObserver = AttachmentResponseObserver(store: store, continuation: responseSink); responseObserver.observe()
+        let responseDeadline = Task { try await Task.sleep(for: .seconds(90)); responseSink.finish() }
+        defer { responseDeadline.cancel(); withExtendedLifetime(responseObserver) {} }
+        let sent = await store.send(text: "Read the attached text file and look at the image. Reply with one short sentence mentioning the text is fixture data and the image says T3 attachment draft. Do not change files.", threadID: thread, model: selected, attachments: files, draftKey: key)
+        XCTAssertTrue(sent, store.error ?? "Attachment dispatch failed")
+        let remaining = try await AttachmentDraftStore.shared.items(key: key)
+        XCTAssertTrue(remaining.isEmpty)
+        XCTAssertTrue(localURLs.allSatisfy { !FileManager.default.fileExists(atPath: $0.path) })
+        var completed = false
+        for await response in responses { completed = response }
+        XCTAssertTrue(completed, "No completed assistant response from isolated host")
+        let message = try XCTUnwrap(store.conversation?.rows.last { $0.isUser && $0.value["attachments"].array.count == 2 })
+        XCTAssertEqual(Set(message.value["attachments"].array.map { $0["type"].string }), ["image", "file"])
+        XCTAssertEqual(message.value["attachments"].array.map { $0["sizeBytes"].int }, files.map(\.sizeBytes))
+        for (attachment, source) in zip(message.value["attachments"].array, [source, image]) {
+            let downloaded = try await store.previewAttachment(AttachmentReference(attachment), hostID: host.id)
+            XCTAssertEqual(try Data(contentsOf: downloaded.url), try Data(contentsOf: source.url), "The server must retain the exact uploaded bytes.")
+        }
+        print("NATIVE_ATTACHMENT_SEND_CONFIRMED files=2 localCopiesCleared=true assistantCompleted=\(completed)")
+        withExtendedLifetime([source, image]) {}
+    }
+
+}
+
+@MainActor private final class AttachmentResponseObserver {
+    let store: AppStore
+    let continuation: AsyncStream<Bool>.Continuation
+    init(store: AppStore, continuation: AsyncStream<Bool>.Continuation) { self.store = store; self.continuation = continuation }
+    func observe() {
+        withObservationTracking {
+            let rows = store.conversation?.rows ?? []
+            if rows.contains(where: { $0.type == "assistant_message" && !$0.text.isEmpty && !$0.value["streaming"].bool }) { continuation.yield(true); continuation.finish() }
+            else if rows.contains(where: { $0.type == "error" }) { continuation.yield(false); continuation.finish() }
+        } onChange: { [weak self] in Task { @MainActor in self?.observe() } }
+    }
 }
 
 @MainActor private final class ConnectionObserver {
     let store: AppStore
     let continuation: AsyncStream<Result<Bool, ClientError>>.Continuation
-    init(store: AppStore, continuation: AsyncStream<Result<Bool, ClientError>>.Continuation) {
-        self.store = store; self.continuation = continuation
+    let requireConfig: Bool
+    init(store: AppStore, continuation: AsyncStream<Result<Bool, ClientError>>.Continuation, requireConfig: Bool = false) {
+        self.store = store; self.continuation = continuation; self.requireConfig = requireConfig
     }
     func observe() {
         withObservationTracking {
-            if store.connected { continuation.yield(.success(true)); continuation.finish() }
+            if store.connected && (!requireConfig || !store.config["providers"].array.isEmpty) { continuation.yield(.success(true)); continuation.finish() }
             else if let error = store.error { continuation.yield(.failure(ClientError(error))); continuation.finish() }
         } onChange: { [weak self] in Task { @MainActor in self?.observe() } }
     }

@@ -1,6 +1,9 @@
 {
   "AssetCreateUrlInput": "85b74bb4db7c7ff3cc58e3947aebea7f8c820a2c2529dc670ba72aa0a95d3811",
   "AssetCreateUrlResult": "3eb3dafa8f9b3872e063a559a5faa73801e7c98cc9ed6ff72ad2b4fb3cc550fe",
+  "AttachmentCreateUploadUrlInput": "8863445aaed332cacc58c77315b50f3bbe42ad8e6eef13776b1a48d77a1b9dba",
+  "AttachmentCreateUploadUrlResult": "e909fca2a01053a7d2d83c830e116c38ba2e5dfd99308dc5590c0fd91a7acad6",
+  "AttachmentDeleteInput": "d1be358501ea6dfdbc5258af67a1bedf2bdc0a482f9fb44acb6f7dd839b10c1f",
   "AuthAccessTokenResult": "951c3ab2621c5026d7b719cb60fdcfc70bd2d442209aeebd904c65046a450ed1",
   "AuthTokenExchangeRequest": "a192aa4650f53ae08be1ba76bd72c0d0addbbccf8435e3d9abe51a1c6e0b1b18",
   "AuthWebSocketTicketResult": "b877b7caf765476eedd3eff47ab51ffc98b83b4bd944b36e47309b37340e4f71",

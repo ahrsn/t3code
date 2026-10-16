@@ -130,7 +130,7 @@ actor RPCTransport {
                 timeouts.removeValue(forKey: id)?.cancel()
                 pending.removeValue(forKey: id)?.resume(returning: exit["value"])
             } else {
-                let error = ClientError(Self.failureMessage(exit))
+                let error = RPCFailure(value: exit)
                 fail(id, error: error)
                 if let handler = handlers[id] { await handler(.object(["kind": .string("client.error"), "message": .string(error.message)])) }
             }
@@ -153,5 +153,17 @@ actor RPCTransport {
             if found != "The server rejected this action." { return found }
         }
         return "The server rejected this action."
+    }
+}
+
+struct RPCFailure: LocalizedError, Sendable {
+    let value: JSONValue
+    var message: String { RPCTransport.failureMessage(value) }
+    var errorDescription: String? { message }
+    func contains(tag: String) -> Bool {
+        func search(_ value: JSONValue) -> Bool {
+            value["_tag"].string == tag || value.object.values.contains(where: search) || value.array.contains(where: search)
+        }
+        return search(value)
     }
 }

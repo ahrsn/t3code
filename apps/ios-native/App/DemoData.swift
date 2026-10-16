@@ -12,6 +12,11 @@ extension AppStore {
           {"slug":"gpt-6-astra","name":"GPT-6 Astra","capabilities":{"optionDescriptors":[]}}]},
           {"instanceId":"claudeAgent","driver":"claudeAgent","displayName":"Claude","enabled":true,"installed":true,"auth":{"status":"authenticated"},"models":[{"slug":"claude-sonnet-4-6","name":"Claude Sonnet 4.6"}]}]}
         """#.utf8))
+        config["environment"] = .object(["capabilities": .object(["attachmentUploads": .bool(true), "fileAttachments": .object(["maxUploadBytes": .number(50 * 1024 * 1024)])])])
+        if threadID == "t0", ProcessInfo.processInfo.arguments.contains("--attachment-upload-preview") {
+            sending = true; uploadingName = "Composer notes.txt"; uploadFraction = 0.42
+            uploadDraftKey = "draft.\(activeHostID?.uuidString ?? "none").t0.preview-attachments"
+        }
         let projects = [
             JSONValue.object(["id": .string("p1"), "title": .string("t3code")]),
             .object(["id": .string("p2"), "title": .string("Personal website")])

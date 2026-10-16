@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ConversationScreen: View {
     @Bindable var store: AppStore
@@ -10,12 +11,17 @@ struct ConversationScreen: View {
     @State private var draftModel: JSONValue?
     @State private var viewport = TimelineViewport()
     @State private var previewRequest: AttachmentPreviewRequest?
+    @State private var attachmentDraft = ComposerAttachmentDraft()
+    @State private var showFileImporter = false
+    @State private var importKey = ""
+    @State private var importLimits = AttachmentLimits(uploads: false, fileMaximum: nil)
     @FocusState private var focused: Bool
     @AppStorage("showReasoning") private var showReasoning = false
     @AppStorage("compactRows") private var compactRows = false
     @AppStorage("messageSize") private var messageSize = 16.0
     var thread: JSONValue { store.shell.threads[threadID] ?? store.conversation?.projection.thread ?? .null }
     var draftKey: String { "draft.\(store.activeHostID?.uuidString ?? "none").\(threadID)" }
+    var attachmentKey: String { draftKey + (store.isDemo ? ".preview-attachments" : ".attachments") }
 
     var selectedModel: JSONValue { draftModel ?? thread["modelSelection"] }
 
@@ -57,14 +63,34 @@ struct ConversationScreen: View {
         .sheet(item: $previewRequest) { request in
             AttachmentPreviewScreen(request: request, store: store).environment(\.t3Theme, theme)
         }
-        .onChange(of: store.activeHostID) { _, _ in previewRequest = nil }
-        .task(id: threadID) {
+        .fileImporter(isPresented: $showFileImporter, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
+            switch result {
+            case .success(let urls):
+                let key = importKey, limits = importLimits
+                Task { await attachmentDraft.add(urls, limits: limits, expectedKey: key) }
+            case .failure(let error): attachmentDraft.error = error.localizedDescription
+            }
+        }
+        .onChange(of: store.activeHostID) { _, _ in previewRequest = nil; showFileImporter = false }
+        .task(id: draftKey) {
             draft = UserDefaults.standard.string(forKey: draftKey) ?? ""
             draftModel = UserDefaults.standard.data(forKey: draftKey + ".model").flatMap { try? JSONValue.decode($0) }
             viewport.frames.removeAll()
+            await attachmentDraft.load(key: attachmentKey)
+            #if DEBUG
+            if store.isDemo && ProcessInfo.processInfo.arguments.contains("--reset-demo-attachments") {
+                for item in attachmentDraft.items { await attachmentDraft.remove(item) }
+            }
+            #endif
             await store.selectThread(threadID)
         }
         .onChange(of: draft) { _, value in UserDefaults.standard.set(value, forKey: draftKey) }
+        .onChange(of: store.lastConfirmedSend) { _, confirmation in
+            guard let confirmation, confirmation.draftKey == attachmentKey else { return }
+            if draft == confirmation.text { draft = "" }
+            let key = attachmentKey
+            Task { await attachmentDraft.refresh(key: key) }
+        }
         .onChange(of: draftModel) { _, value in
             if let value, let data = try? value.data() { UserDefaults.standard.set(data, forKey: draftKey + ".model") }
             else { UserDefaults.standard.removeObject(forKey: draftKey + ".model") }
@@ -150,6 +176,13 @@ struct ConversationScreen: View {
 
     private var composer: some View {
         VStack(alignment: .leading, spacing: 10) {
+            if let error = attachmentDraft.error {
+                HStack(alignment: .top) {
+                    Text(error).font(T3Font.caption).foregroundStyle(.red)
+                    Spacer(minLength: 8)
+                    Button { attachmentDraft.error = nil } label: { Image(systemName: "xmark") }.accessibilityLabel("Dismiss attachment error")
+                }.padding(.horizontal, 4)
+            }
             if !thread["activeRunId"].isNull {
                 HStack {
                     Label("Working", systemImage: "circle.dashed").font(T3Font.caption).foregroundStyle(theme.muted)
@@ -159,6 +192,15 @@ struct ConversationScreen: View {
                 }.padding(.horizontal, 4)
             }
             VStack(alignment: .leading, spacing: 12) {
+                if !attachmentDraft.items.isEmpty { ComposerAttachmentChips(draft: attachmentDraft, disabled: store.sending || attachmentDraft.busy) }
+                if store.uploadDraftKey == attachmentKey, let name = store.uploadingName {
+                    HStack(spacing: 8) {
+                        ProgressView(value: store.uploadFraction).frame(width: 36)
+                        Text("Uploading \(name)").font(T3Font.caption).lineLimit(1)
+                        Spacer(minLength: 0)
+                        Button("Cancel") { cancelUpload() }.font(T3Font.caption).accessibilityLabel("Cancel upload")
+                    }
+                } else if attachmentDraft.busy { ProgressView("Attaching…").font(T3Font.caption) }
                 HStack(alignment: .bottom, spacing: 12) {
                     TextField("Ask anything…", text: $draft, axis: .vertical)
                         .lineLimit(1...7).font(T3Font.body).focused($focused)
@@ -166,15 +208,36 @@ struct ConversationScreen: View {
                     Button {
                         let submitted = draft
                         let submittedModel = draftModel
-                        Task { if await store.send(text: submitted, threadID: threadID, model: submittedModel), draft == submitted { draft = "" } }
+                        let key = attachmentKey, textKey = draftKey, files = attachmentDraft.items
+                        store.composerSendTask = Task {
+                            let sent = await store.send(text: submitted, threadID: threadID, model: submittedModel, attachments: files, draftKey: key)
+                            if sent, UserDefaults.standard.string(forKey: textKey) == submitted { UserDefaults.standard.removeObject(forKey: textKey) }
+                            if sent, attachmentKey == key, draft == submitted { draft = "" }
+                            await attachmentDraft.refresh(key: key)
+                            store.composerSendTask = nil
+                        }
                     } label: {
                         Image(systemName: store.sending ? "ellipsis" : "arrow.up")
                             .font(.system(size: 15, weight: .semibold)).frame(width: 34, height: 34)
                     }.buttonStyle(.glassProminent).buttonBorderShape(.circle)
-                        .disabled(!store.canOperate || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || store.sending)
+                        .disabled(!store.canOperate || (draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && attachmentDraft.items.isEmpty) || store.sending || store.composerSendTask != nil || attachmentDraft.busy)
                         .accessibilityLabel("Send message").accessibilityIdentifier("send-message")
                 }
                 HStack(spacing: 8) {
+                    Menu {
+                        Button("Choose files", systemImage: "folder") {
+                            focused = false; importKey = attachmentKey; importLimits = AttachmentLimits(config: store.config); showFileImporter = true
+                        }
+                        #if DEBUG
+                        if store.isDemo && ProcessInfo.processInfo.arguments.contains("--attachment-draft-demo") {
+                            Button("Sample text", systemImage: "doc.text") { Task { await addFixture(image: false) } }
+                            Button("Sample image", systemImage: "photo") { Task { await addFixture(image: true) } }
+                            Button("Empty sample", systemImage: "doc") { Task { await addFixture(image: false, empty: true) } }
+                        }
+                        #endif
+                    } label: { Image(systemName: "paperclip").frame(width: 28, height: 28) }
+                        .accessibilityLabel("Attach files").accessibilityIdentifier("attach-files")
+                        .disabled((!store.canOperate && !store.isDemo) || !AttachmentLimits(config: store.config).uploads || store.sending || attachmentDraft.busy || attachmentDraft.key != attachmentKey)
                     Button { focused = false; showModelSettings = true } label: {
                         HStack(spacing: 6) {
                             Image(systemName: "sparkle").font(.system(size: 12))
@@ -195,6 +258,21 @@ struct ConversationScreen: View {
         }.padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 6)
         .background { theme.canvas.opacity(0.96).ignoresSafeArea(edges: .bottom) }
     }
+    private func cancelUpload() {
+        store.composerSendTask?.cancel()
+        #if DEBUG
+        if store.isDemo { store.sending = false; store.uploadingName = nil; store.uploadDraftKey = nil }
+        #endif
+    }
+    #if DEBUG
+    private func addFixture(image: Bool, empty: Bool = false) async {
+        do {
+            let file = try AttachmentDraftFixtures.file(image: image, empty: empty)
+            await attachmentDraft.add([file.url], limits: AttachmentLimits(config: store.config))
+            withExtendedLifetime(file) {}
+        } catch { attachmentDraft.error = error.localizedDescription }
+    }
+    #endif
     private var modelName: String {
         let selection = selectedModel
         let provider = store.config["providers"].array.first { $0["instanceId"] == selection["instanceId"] }
