@@ -13,6 +13,8 @@ EXPORTS = {
     "packages/contracts/src/auth.ts": ["AuthTokenExchangeRequest", "AuthAccessTokenResult", "AuthWebSocketTicketResult"],
     "packages/contracts/src/orchestrationV2.ts": ["OrchestrationV2ThreadLaunchInput", "OrchestrationV2SubscribeThreadInput", "OrchestrationV2RuntimeRequest", "OrchestrationV2ShellStreamItem", "OrchestrationV2ThreadStreamItem"],
     "packages/contracts/src/modelSelection.ts": ["ModelSelectionWire"],
+    "packages/contracts/src/model.ts": [],
+    "packages/contracts/src/settings.ts": [],
     "packages/shared/src/themePalettes.ts": [],
     "apps/mobile/src/lib/typography.ts": [],
     "packages/contracts/src/environment.ts": ["ORCHESTRATION_PROTOCOL_VERSION", "ORCHESTRATION_PROTOCOL_QUERY_PARAM", "ORCHESTRATION_PROTOCOL_HEADER"],

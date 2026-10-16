@@ -4,6 +4,14 @@ import Foundation
 extension AppStore {
     func loadDemo(threadID: String = "t0") {
         isDemo = true; phase = "Preview data"
+        config = try! JSONValue.decode(Data(#"""
+        {"providers":[{"instanceId":"codex","driver":"codex","displayName":"Codex","enabled":true,"installed":true,"auth":{"status":"authenticated"},"models":[
+          {"slug":"gpt-6.1-sol","name":"GPT-6.1 Sol","isDefault":true,"capabilities":{"optionDescriptors":[
+            {"id":"effort","label":"Reasoning effort","type":"select","currentValue":"high","options":[{"id":"low","label":"Low"},{"id":"high","label":"High","isDefault":true},{"id":"max","label":"Max"}]},
+            {"id":"fastMode","label":"Fast mode","type":"boolean","currentValue":false}]}},
+          {"slug":"gpt-6-astra","name":"GPT-6 Astra","capabilities":{"optionDescriptors":[]}}]},
+          {"instanceId":"claudeAgent","driver":"claudeAgent","displayName":"Claude","enabled":true,"installed":true,"auth":{"status":"authenticated"},"models":[{"slug":"claude-sonnet-4-6","name":"Claude Sonnet 4.6"}]}]}
+        """#.utf8))
         let projects = [
             JSONValue.object(["id": .string("p1"), "title": .string("t3code")]),
             .object(["id": .string("p2"), "title": .string("Personal website")])

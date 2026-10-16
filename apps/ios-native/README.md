@@ -4,6 +4,8 @@ A personal SwiftUI iOS client for T3 Code, maintained in the `ahrsn/t3code` fork
 
 This is an early client. Direct server pairing, project and conversation navigation, streaming, sending messages, interrupting runs, request responses, and pageable history are implemented. T3 Connect account discovery and relay login, push notifications, sending attachments, terminal interaction, and full desktop review tools still need implementation. Attachments are currently identified by name. Existing server-side provider credentials stay on the server.
 
+The composer model control selects a provider, model, and server-advertised options such as reasoning effort or fast mode. These choices persist with the local draft and are sent atomically with the next message. Changing them does not alter an active run. The picker respects project provider overrides, authentication, hidden models, and provider update requirements.
+
 ## Build
 
 Use Xcode 26 or later and XcodeGen. The checked-in Xcode project can be opened directly. Regenerate it after changing `project.yml`.

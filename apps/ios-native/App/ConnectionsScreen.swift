@@ -110,8 +110,10 @@ struct NewThreadScreen: View {
     @State private var instanceID = ""
     @State private var creating = false
     @State private var error: String?
-    var providers: [JSONValue] { store.config["providers"].array.filter { $0["enabled"].bool && $0["availability"].string != "unavailable" } }
-    var models: [JSONValue] { providers.first(where: { $0["instanceId"].string == instanceID })?["models"].array ?? [] }
+    var catalog: ModelCatalog { ModelCatalog(config: store.config, projectID: projectID) }
+    var providers: [JSONValue] { catalog.providers }
+    var models: [JSONValue] { catalog.models(for: instanceID) }
+    var selection: JSONValue { .object(["instanceId": .string(instanceID), "model": .string(modelID)]) }
     var body: some View {
         NavigationStack {
             Form {
@@ -124,7 +126,7 @@ struct NewThreadScreen: View {
                     Picker("Provider", selection: $instanceID) {
                         Text("Choose a provider").tag("")
                         ForEach(providers, id: \.providerID) { provider in
-                            Text(provider["displayName"].string.isEmpty ? provider["driver"].string.capitalized : provider["displayName"].string).tag(provider["instanceId"].string)
+                            Text(ModelCatalog.label(provider)).tag(provider["instanceId"].string)
                         }
                     }
                     Picker("Model", selection: $modelID) {
@@ -143,15 +145,16 @@ struct NewThreadScreen: View {
                             guard let project = store.shell.projects[projectID] else { return }
                             creating = true; defer { creating = false }
                             do {
-                                let id = try await store.createThread(project: project, title: title, model: .object(["instanceId": .string(instanceID), "model": .string(modelID)]))
+                                let id = try await store.createThread(project: project, title: title, model: selection)
                                 dismiss(); onCreate(id)
                             } catch { self.error = error.localizedDescription }
                         }
-                    }.disabled(projectID.isEmpty || instanceID.isEmpty || modelID.isEmpty || creating)
+                    }.disabled(projectID.isEmpty || !catalog.canSelect(selection) || creating)
                 }
             }
             .onChange(of: projectID) { _, id in
-                let model = store.shell.projects[id]?["defaultModelSelection"] ?? .null
+                let preferred = store.shell.projects[id]?["defaultModelSelection"] ?? store.config["settings"]["defaultModelSelection"]
+                let model = catalog.defaultSelection(preferred: preferred)
                 instanceID = model["instanceId"].string; modelID = model["model"].string
             }
             .onChange(of: instanceID) { _, _ in

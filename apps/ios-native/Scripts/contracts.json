@@ -14,7 +14,9 @@
   "apps/mobile/src/lib/typography.ts": "48ca716c20b32a0b46ddb6fc4b570fe6a4e10a4c175f004434707a4272054fe8",
   "packages/contracts/src/auth.ts": "934413570c75ffa16a98e9fb507ea192c74ea654659befd813706ef8761e6556",
   "packages/contracts/src/environment.ts": "694e1d6e04fc2b7ebd6456c5d696f052aaf68beb7d595ff303110f82642a2c8b",
+  "packages/contracts/src/model.ts": "d17bfff79c582b6df053a3b594bd154bbf011ff65686b178c9ef4b1e3caab4d2",
   "packages/contracts/src/modelSelection.ts": "83af9145f0891aee7f41dc4574e5e5ad86745b18afac7cff03f4358ef9149b35",
   "packages/contracts/src/orchestrationV2.ts": "d0cb10a1ed389eae198c8524b6206442d468772b1bf4796aae1929456122ca5c",
+  "packages/contracts/src/settings.ts": "95968ce5c6c2334bcb93a816e11819bcfb4c471a0d149b11fa81498d0129c59d",
   "packages/shared/src/themePalettes.ts": "974df3ed028502e9dcebea3dd0da2d07b9bfa021a88600dbdf68f0c263e2a092"
 }

@@ -6,12 +6,16 @@ struct ConversationScreen: View {
     @Environment(\.t3Theme) private var theme
     @State private var draft = ""
     @State private var showAppearance = false
+    @State private var showModelSettings = false
+    @State private var draftModel: JSONValue?
     @FocusState private var focused: Bool
     @AppStorage("showReasoning") private var showReasoning = false
     @AppStorage("compactRows") private var compactRows = false
     @AppStorage("messageSize") private var messageSize = 16.0
     var thread: JSONValue { store.shell.threads[threadID] ?? store.conversation?.projection.thread ?? .null }
     var draftKey: String { "draft.\(store.activeHostID?.uuidString ?? "none").\(threadID)" }
+
+    var selectedModel: JSONValue { draftModel ?? thread["modelSelection"] }
 
     var body: some View {
         Group {
@@ -44,11 +48,20 @@ struct ConversationScreen: View {
         }
         .safeAreaInset(edge: .bottom, spacing: 0) { composer }
         .sheet(isPresented: $showAppearance) { AppearanceScreen().environment(\.t3Theme, theme) }
+        .sheet(isPresented: $showModelSettings) {
+            ModelSettingsScreen(store: store, projectID: thread["projectId"].string, current: selectedModel) { draftModel = $0 }
+                .environment(\.t3Theme, theme)
+        }
         .task(id: threadID) {
             draft = UserDefaults.standard.string(forKey: draftKey) ?? ""
+            draftModel = UserDefaults.standard.data(forKey: draftKey + ".model").flatMap { try? JSONValue.decode($0) }
             await store.selectThread(threadID)
         }
         .onChange(of: draft) { _, value in UserDefaults.standard.set(value, forKey: draftKey) }
+        .onChange(of: draftModel) { _, value in
+            if let value, let data = try? value.data() { UserDefaults.standard.set(data, forKey: draftKey + ".model") }
+            else { UserDefaults.standard.removeObject(forKey: draftKey + ".model") }
+        }
         .onDisappear { Task { await store.closeConversation(expectedID: threadID) } }
     }
 
@@ -121,7 +134,8 @@ struct ConversationScreen: View {
                         .accessibilityLabel("Message").accessibilityIdentifier("message-input")
                     Button {
                         let submitted = draft
-                        Task { if await store.send(text: submitted, threadID: threadID), draft == submitted { draft = "" } }
+                        let submittedModel = draftModel
+                        Task { if await store.send(text: submitted, threadID: threadID, model: submittedModel), draft == submitted { draft = "" } }
                     } label: {
                         Image(systemName: store.sending ? "ellipsis" : "arrow.up")
                             .font(.system(size: 15, weight: .semibold)).frame(width: 34, height: 34)
@@ -130,8 +144,14 @@ struct ConversationScreen: View {
                         .accessibilityLabel("Send message").accessibilityIdentifier("send-message")
                 }
                 HStack(spacing: 8) {
-                    Image(systemName: "sparkle").font(.system(size: 12))
-                    Text(modelName).font(T3Font.caption).lineLimit(1)
+                    Button { focused = false; showModelSettings = true } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "sparkle").font(.system(size: 12))
+                            Text(modelName.isEmpty ? "Choose model" : modelName).font(T3Font.caption).lineLimit(1)
+                            Image(systemName: "chevron.down").font(.system(size: 9))
+                        }.padding(.vertical, 4).contentShape(.rect)
+                    }.buttonStyle(.plain).accessibilityLabel("Model settings")
+                        .accessibilityValue(modelName).accessibilityIdentifier("model-settings")
                     Spacer(minLength: 0)
                     if !thread["runtimeMode"].string.isEmpty {
                         Label(thread["runtimeMode"].string == "full-access" ? "Full access" : "Approvals", systemImage: "lock.open")
@@ -145,7 +165,7 @@ struct ConversationScreen: View {
         .background { theme.canvas.opacity(0.96).ignoresSafeArea(edges: .bottom) }
     }
     private var modelName: String {
-        let selection = thread["modelSelection"]
+        let selection = selectedModel
         let provider = store.config["providers"].array.first { $0["instanceId"] == selection["instanceId"] }
         let model = provider?["models"].array.first { $0["slug"] == selection["model"] }
         return model?["name"].string ?? selection["model"].string

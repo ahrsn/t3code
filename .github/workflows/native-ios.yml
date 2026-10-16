@@ -73,7 +73,8 @@ jobs:
             -derivedDataPath build/DerivedData -resultBundlePath build/ui.xcresult \
             -parallel-testing-enabled NO -jobs 2 CODE_SIGNING_ALLOWED=NO \
             -only-testing:T3NativeUITests/NativeFlowTests/testNativeAppearanceAndConversationWithPreviewData \
-            -only-testing:T3NativeUITests/NativeFlowTests/testUpstreamThemeVariantsWithPreviewData test
+            -only-testing:T3NativeUITests/NativeFlowTests/testUpstreamThemeVariantsWithPreviewData \
+            -only-testing:T3NativeUITests/NativeFlowTests/testModelOptionsAndProviderDraftWithPreviewData test
       - uses: actions/upload-artifact@v4
         if: always()
         with:

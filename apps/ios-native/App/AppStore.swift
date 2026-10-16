@@ -44,6 +44,7 @@ import Observation
         if ProcessInfo.processInfo.arguments.contains("--demo") {
             if ProcessInfo.processInfo.arguments.contains("--reset-demo-draft") {
                 UserDefaults.standard.removeObject(forKey: "draft.\(activeHostID?.uuidString ?? "none").t0")
+                UserDefaults.standard.removeObject(forKey: "draft.\(activeHostID?.uuidString ?? "none").t0.model")
             }
             loadDemo()
         }
@@ -183,14 +184,25 @@ import Observation
         var fields = fields; fields["commandId"] = .string(UUID().uuidString)
         _ = try await transport.call("orchestration.dispatchCommand", payload: .object(fields))
     }
-    func send(text: String, threadID: String) async -> Bool {
+    func send(text: String, threadID: String, model: JSONValue? = nil) async -> Bool {
         guard !sending, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
         sending = true; defer { sending = false }
         do {
-            try await dispatch(["type": .string("message.dispatch"), "createdBy": .string("user"), "creationSource": .string("mobile"),
+            if let model {
+                let projectID = shell.threads[threadID]?["projectId"].string ?? ""
+                guard ModelCatalog(config: config, projectID: projectID).canSelect(model) else {
+                    throw ClientError("This model is no longer available for this project. Choose another model before sending.")
+                }
+            }
+            var fields: [String: JSONValue] = ["type": .string("message.dispatch"), "createdBy": .string("user"), "creationSource": .string("mobile"),
                                 "threadId": .string(threadID), "messageId": .string(UUID().uuidString), "text": .string(text),
                                 "attachments": .array([]), "deliveryIntent": .string("auto"),
-                                "dispatchMode": .object(["type": .string("queue_after_active")])])
+                                "dispatchMode": .object(["type": .string("queue_after_active")])]
+            if let model {
+                let catalog = ModelCatalog(config: config, projectID: shell.threads[threadID]?["projectId"].string ?? "")
+                fields["modelSelection"] = catalog.selection(instanceID: model["instanceId"].string, modelID: model["model"].string, options: ModelCatalog.optionValues(model))
+            }
+            try await dispatch(fields)
             return true
         } catch { self.error = error.localizedDescription; return false }
     }
@@ -227,6 +239,7 @@ import Observation
     }
     func createThread(project: JSONValue, title: String, model: JSONValue) async throws -> String {
         guard canOperate else { throw ClientError("Connect with operate permission first.") }
+        guard ModelCatalog(config: config, projectID: project.id).canSelect(model) else { throw ClientError("Choose a model available for this project.") }
         let result = try await transport.call("orchestration.launchThread", payload: .object([
             "commandId": .string(UUID().uuidString), "creationSource": .string("mobile"),
             "projectId": project["id"], "title": .string(title.isEmpty ? "New conversation" : title),
