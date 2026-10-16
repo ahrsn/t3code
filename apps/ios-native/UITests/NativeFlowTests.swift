@@ -98,6 +98,7 @@ import XCTest
         let before = marker.frame.minY
         capture("17-history-before-page-preview", app: app)
         load.tap()
+        XCTAssertTrue(app.staticTexts["History marker 15"].waitForExistence(timeout: 5))
         capture("18-history-after-page-preview", app: app)
         XCTAssertTrue(marker.isHittable, "Loading history must keep the current message visible.")
         XCTAssertEqual(marker.frame.minY, before, accuracy: 5, "Prepending a page must preserve the reading offset.")
@@ -117,6 +118,7 @@ import XCTest
         XCTAssertTrue(marker.isHittable)
         let before = marker.frame.minY
         load.tap()
+        XCTAssertTrue(app.staticTexts["History marker 15"].waitForExistence(timeout: 5))
         XCTAssertTrue(marker.isHittable)
         XCTAssertEqual(marker.frame.minY, before, accuracy: 5)
         capture("19-history-long-message-preview", app: app)
@@ -135,6 +137,7 @@ import XCTest
         let marker = app.staticTexts["History marker 16"]
         let beforeRetry = marker.frame.minY
         app.buttons["Retry earlier messages"].tap()
+        XCTAssertTrue(app.staticTexts["History marker 15"].waitForExistence(timeout: 5))
         XCTAssertFalse(failure.exists)
         XCTAssertTrue(marker.isHittable)
         XCTAssertEqual(marker.frame.minY, beforeRetry, accuracy: 5)
@@ -144,6 +147,8 @@ import XCTest
         XCTAssertTrue(older.isHittable)
         let beforeFinal = older.frame.minY
         load.tap()
+        expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: load)
+        waitForExpectations(timeout: 5)
         XCTAssertFalse(load.exists)
         XCTAssertTrue(older.isHittable)
         XCTAssertEqual(older.frame.minY, beforeFinal, accuracy: 5)
