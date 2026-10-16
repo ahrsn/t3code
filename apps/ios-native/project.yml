@@ -1,0 +1,67 @@
+name: T3Native
+options:
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+    TARGETED_DEVICE_FAMILY: "1,2"
+    DEVELOPMENT_TEAM: 728RATZMAR
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  T3Native:
+    type: application
+    platform: iOS
+    sources: [App, Core]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.ahrsn.t3native
+        INFOPLIST_FILE: App/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        GENERATE_INFOPLIST_FILE: NO
+        SUPPORTS_MACCATALYST: NO
+  T3NativeTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [Tests]
+    dependencies:
+      - target: T3Native
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.ahrsn.t3native.tests
+        GENERATE_INFOPLIST_FILE: YES
+  T3NativeUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [UITests]
+    dependencies:
+      - target: T3Native
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.ahrsn.t3native.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: T3Native
+schemes:
+  T3Native:
+    build:
+      targets:
+        T3Native: all
+        T3NativeTests: [test]
+    test:
+      targets: [T3NativeTests]
+      gatherCoverageData: true
+    archive:
+      config: Release
+  T3NativeUI:
+    build:
+      targets:
+        T3Native: all
+        T3NativeUITests: [test]
+    test:
+      targets: [T3NativeUITests]
