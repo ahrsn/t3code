@@ -334,7 +334,8 @@ struct ComposerSendConfirmation: Equatable {
         #endif
         guard connected, activeHostID == hostID, hostID != nil else { throw ClientError("Reconnect to this server to load output.") }
         let generation = connectionGeneration
-        let result = try await transport.call("orchestration.getTurnItem", payload: target.payload(revision: item["updatedAt"].string))
+        let revision = ToolOutputDocument.isLive(item) ? "live" : item["updatedAt"].string
+        let result = try await transport.call("orchestration.getTurnItem", payload: target.payload(revision: revision))
         try Task.checkCancellation()
         guard conversation === detail, activeHostID == hostID, connectionGeneration == generation else { throw CancellationError() }
         return try target.validate(result, type: item["type"].string)

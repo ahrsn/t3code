@@ -35,6 +35,13 @@ struct ToolOutputDocument: Equatable, Sendable {
     static func needsFetch(_ item: JSONValue) -> Bool {
         item["outputOmitted"].bool || (item["input"]["truncated"].bool && !item["input"]["summary"].isNull)
     }
+    static func isLive(_ item: JSONValue) -> Bool { ["idle", "pending", "running", "waiting"].contains(item["status"].string) }
+    static func requestIdentity(_ item: JSONValue) -> JSONValue {
+        guard needsFetch(item), isLive(item) else { return item }
+        // Fetch once while active, then again on completion. Output streaming has
+        // its own upstream subscription; timeline metadata is not a polling clock.
+        return .object(["id": item["id"], "type": item["type"], "input": item["input"], "status": .string("live"), "outputOmitted": item["outputOmitted"]])
+    }
 }
 
 actor ToolDocuments {
@@ -53,7 +60,12 @@ actor ToolDocuments {
                 let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
                 text = (try? String(decoding: encoder.encode(bounded), as: UTF8.self)) ?? ""
             }
-            if !text.isEmpty { sections.append(.init(title: title, text: text, truncated: budget.truncated || (key == "output" && item["outputOmitted"].bool))) }
+            var display = TextBudget()
+            let visible = display.text(text)
+            if !visible.isEmpty {
+                let abbreviated = key == "output" ? item["outputOmitted"].bool : item["input"]["truncated"].bool
+                sections.append(.init(title: title, text: visible, truncated: budget.truncated || display.truncated || abbreviated))
+            }
         }
         let exit = item["exitCode"]
         let failed = item["status"].string == "failed" || item["outputIndicatesFailure"].bool || (!exit.isNull && exit.int != 0) || item["output"]["isError"].bool || item["output"]["is_error"].bool

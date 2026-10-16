@@ -368,6 +368,14 @@ import XCTest
         tool("Removed output").tap()
         XCTAssertTrue(app.staticTexts["Output is no longer available."].waitForExistence(timeout: 10))
         capture("70-native-missing-tool-output-preview", app: app)
+        tool("Removed output").tap()
+        tool("Inspect an active command").tap()
+        XCTAssertTrue(app.staticTexts["Running fixture output snapshot 1"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["Refresh output"].exists)
+        capture("71-native-active-tool-output-preview", app: app)
+        app.buttons["Refresh output"].tap()
+        XCTAssertTrue(app.staticTexts["Running fixture output snapshot 2"].waitForExistence(timeout: 10))
+        capture("72-native-refreshed-tool-output-preview", app: app)
     }
     func testUnsentAttachmentsOpenLocalNativePreviewsWithPreviewData() {
         let app = XCUIApplication()

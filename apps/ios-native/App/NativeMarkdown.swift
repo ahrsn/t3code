@@ -130,5 +130,6 @@ struct CodeBlock: View {
             })
         }
         .padding(12).background(theme.color("codeBackground"), in: .rect(cornerRadius: 12))
+        .onChange(of: code) { _, _ in copied = false }
     }
 }

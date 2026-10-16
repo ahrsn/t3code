@@ -20,7 +20,7 @@ struct ToolOutputRow: View {
         let error: String?
         let loading: Bool
     }
-    private var request: Request { Request(context: contextID, item: item, expanded: expanded, revision: revision) }
+    private var request: Request { Request(context: contextID, item: ToolOutputDocument.requestIdentity(item), expanded: expanded, revision: revision) }
     private var title: String {
         if !item["title"].string.isEmpty { return item["title"].string }
         if !item["toolName"].string.isEmpty { return item["toolName"].string }
@@ -32,7 +32,8 @@ struct ToolOutputRow: View {
                 if let presentation, presentation.request == request {
                     if let document = presentation.document {
                         if !document.status.isEmpty {
-                            Text(document.status).font(T3Font.caption).foregroundStyle(document.failed ? .red : .secondary)
+                            Text(ToolOutputDocument.isLive(item) && !document.status.hasPrefix("Exit ") ? item["status"].string.capitalized : document.status)
+                                .font(T3Font.caption).foregroundStyle(document.failed ? .red : .secondary)
                         }
                         ForEach(Array(document.sections.enumerated()), id: \.offset) { _, section in
                             CodeBlock(code: section.text, language: section.title, pointSize: max(12, pointSize * 0.85), maximumTextHeight: 260)
@@ -47,6 +48,9 @@ struct ToolOutputRow: View {
                     if let error = presentation.error {
                         Text(error).font(T3Font.subheadline).textSelection(.enabled)
                         Button("Retry output") { revision += 1 }.font(T3Font.subheadline).buttonStyle(.borderless)
+                    }
+                    if ToolOutputDocument.isLive(item), ToolOutputDocument.needsFetch(item), !presentation.loading, presentation.error == nil {
+                        Button("Refresh output") { revision += 1 }.font(T3Font.subheadline).buttonStyle(.borderless)
                     }
                 } else { ProgressView("Loading output").font(T3Font.caption) }
             }.padding(.top, 8)

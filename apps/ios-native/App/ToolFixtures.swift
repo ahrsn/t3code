@@ -14,7 +14,9 @@ enum ToolFixtures {
             .object(["id": .string("tool-large"), "type": .string("dynamic_tool"), "title": .string("Read a long result"),
                      "input": .object(["summary": .string("Read file"), "truncated": .bool(true)]), "outputOmitted": .bool(true), "status": .string("completed")]),
             .object(["id": .string("tool-gone"), "type": .string("command_execution"), "title": .string("Removed output"),
-                     "input": .string("old task"), "outputOmitted": .bool(true), "status": .string("completed")])
+                     "input": .string("old task"), "outputOmitted": .bool(true), "status": .string("completed")]),
+            .object(["id": .string("tool-live"), "type": .string("command_execution"), "title": .string("Inspect an active command"),
+                     "input": .string("long-running fixture"), "outputOmitted": .bool(true), "status": .string("running")])
         ]
     }
     static func detail(_ item: JSONValue, attempts: inout Set<String>) throws -> JSONValue {
@@ -27,6 +29,9 @@ enum ToolFixtures {
         case "tool-large":
             full["input"] = .object(["path": .string("native/long-log.txt")])
             full["output"] = .string(String(repeating: "Long fixture output line.\n", count: 4000))
+        case "tool-live":
+            let first = attempts.insert(item.id).inserted
+            full["output"] = .string(first ? "Running fixture output snapshot 1" : "Running fixture output snapshot 2")
         default: break
         }
         return full

@@ -29,6 +29,12 @@ final class ToolOutputTests: XCTestCase {
         XCTAssertLessThanOrEqual(section.text.utf8.count, ToolDocuments.maximumTextBytes)
         XCTAssertFalse(section.text.contains("�")); XCTAssertTrue(text.hasPrefix(section.text))
     }
+    func testJSONEscapingCannotExpandTheDisplayedTextPastItsLimit() async {
+        let item = JSONValue.object(["output": .object(["text": .string(String(repeating: "\u{0001}", count: 50_000))])])
+        let document = await ToolDocuments.shared.document(for: item)
+        XCTAssertTrue(document.sections[0].truncated)
+        XCTAssertLessThanOrEqual(document.sections[0].text.utf8.count, ToolDocuments.maximumTextBytes)
+    }
     func testLargeCollectionsAndBinaryBlocksHaveBoundedPresentation() async throws {
         let block = JSONValue.object(["type": .string("image"), "mimeType": .string("image/png"), "data": .string(String(repeating: "A", count: 1_000_000))])
         let document = await ToolDocuments.shared.document(for: .object(["output": .object(["content": .array([block]), "values": .array(Array(repeating: .number(1), count: 10_000))])]))
@@ -42,6 +48,16 @@ final class ToolOutputTests: XCTestCase {
         XCTAssertTrue(ToolOutputDocument.needsFetch(.object(["outputOmitted": .bool(true)])))
         XCTAssertTrue(ToolOutputDocument.needsFetch(.object(["input": .object(["summary": .string("Read"), "truncated": .bool(true)])])))
         XCTAssertFalse(ToolOutputDocument.needsFetch(.object(["input": .object(["truncated": .bool(false)])])))
+    }
+    func testLiveMetadataDoesNotRefetchUntilCompletionOrInputChanges() {
+        var running = JSONValue.object(["id": .string("one"), "type": .string("command_execution"), "status": .string("running"), "updatedAt": .string("first"), "outputOmitted": .bool(true), "input": .string("swift test")])
+        let first = ToolOutputDocument.requestIdentity(running)
+        running["updatedAt"] = .string("second"); running["status"] = .string("waiting")
+        XCTAssertEqual(first, ToolOutputDocument.requestIdentity(running))
+        running["status"] = .string("completed")
+        XCTAssertNotEqual(first, ToolOutputDocument.requestIdentity(running))
+        running["status"] = .string("running"); running["input"] = .string("swift build")
+        XCTAssertNotEqual(first, ToolOutputDocument.requestIdentity(running))
     }
     func testInheritedSnapshotAndHistoryUseOriginalItemTargets() {
         var projection = ThreadProjection()
