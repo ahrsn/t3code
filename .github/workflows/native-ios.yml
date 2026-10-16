@@ -19,7 +19,7 @@ jobs:
   native:
     if: github.repository == 'ahrsn/t3code'
     runs-on: macos-26
-    timeout-minutes: 25
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v6
         with:
