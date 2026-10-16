@@ -362,8 +362,9 @@ import XCTest
         capture("68-native-tool-error-recovered-preview", app: app)
         tool("Retry failed command output").tap()
         tool("Read a long result").tap()
-        let limit = app.staticTexts["Showing a shortened result. Copy includes only the displayed portion."]
+        let limit = app.staticTexts["Copy includes only the displayed portion."]
         XCTAssertTrue(limit.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Shortened output"].exists)
         for _ in 0..<4 { if limit.isHittable { break }; outerScrollUp() }
         XCTAssertTrue(limit.isHittable)
         capture("69-native-bounded-tool-output-preview", app: app)

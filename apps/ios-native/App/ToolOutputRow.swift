@@ -36,9 +36,10 @@ struct ToolOutputRow: View {
                                 .font(T3Font.caption).foregroundStyle(document.failed ? .red : .secondary)
                         }
                         ForEach(Array(document.sections.enumerated()), id: \.offset) { _, section in
-                            CodeBlock(code: section.text, language: section.title, pointSize: max(12, pointSize * 0.85), maximumTextHeight: 260)
+                            CodeBlock(code: section.text, language: section.truncated ? "Shortened " + section.title.lowercased() : section.title,
+                                      pointSize: max(12, pointSize * 0.85), maximumTextHeight: 260)
                             if section.truncated {
-                                Text("Showing a shortened result. Copy includes only the displayed portion.")
+                                Text("Copy includes only the displayed portion.")
                                     .font(T3Font.caption).foregroundStyle(.secondary)
                             }
                         }
