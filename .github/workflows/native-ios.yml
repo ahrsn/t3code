@@ -1,0 +1,80 @@
+name: Native iOS
+
+on:
+  push:
+    branches: [feat/native-ios-client]
+    paths: [apps/ios-native/**, .github/workflows/native-ios.yml]
+  workflow_dispatch:
+  schedule:
+    - cron: "27 8 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native:
+    if: github.repository == 'ahrsn/t3code'
+    runs-on: macos-26
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          sparse-checkout: |
+            apps/ios-native
+            packages/contracts
+            packages/shared
+            LICENSE
+      - name: Install XcodeGen
+        run: brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+      - name: Check supported contracts
+        run: |
+          python3 apps/ios-native/Scripts/check-contracts.py --ref HEAD
+          python3 apps/ios-native/Scripts/sync-theme-colors.py --check
+          git fetch --no-tags --depth=1 https://github.com/pingdotgg/t3code.git main:refs/remotes/upstream/main
+          python3 apps/ios-native/Scripts/check-contracts.py --ref upstream/main
+      - name: Select an existing compatible simulator
+        run: |
+          python3 - <<'PY' >> "$GITHUB_ENV"
+          import json, subprocess
+          data = json.loads(subprocess.check_output(['xcrun', 'simctl', 'list', 'devices', 'available', '--json']))
+          candidates = []
+          for runtime, devices in data['devices'].items():
+              if '.iOS-' not in runtime:
+                  continue
+              version = tuple(int(p) for p in runtime.split('.iOS-')[1].split('-'))
+              if version[0] < 26:
+                  continue
+              for device in devices:
+                  if 'iPhone' in device['name'] and device['state'] == 'Shutdown':
+                      candidates.append((version, device['udid']))
+          if not candidates:
+              raise SystemExit('No idle iOS 26+ iPhone simulator is available.')
+          print('NATIVE_SIMULATOR_ID=' + sorted(candidates, reverse=True)[0][1])
+          PY
+      - name: Unit tests
+        working-directory: apps/ios-native
+        run: |
+          xcodegen generate
+          xcodebuild -project T3Native.xcodeproj -scheme T3Native \
+            -destination "platform=iOS Simulator,id=$NATIVE_SIMULATOR_ID" \
+            -derivedDataPath build/DerivedData -resultBundlePath build/unit.xcresult \
+            -parallel-testing-enabled NO -jobs 2 CODE_SIGNING_ALLOWED=NO test
+      - name: Preview UI flow
+        working-directory: apps/ios-native
+        run: |
+          xcodebuild -project T3Native.xcodeproj -scheme T3NativeUI \
+            -destination "platform=iOS Simulator,id=$NATIVE_SIMULATOR_ID" \
+            -derivedDataPath build/DerivedData -resultBundlePath build/ui.xcresult \
+            -parallel-testing-enabled NO -jobs 2 CODE_SIGNING_ALLOWED=NO \
+            -only-testing:T3NativeUITests/NativeFlowTests/testNativeAppearanceAndConversationWithPreviewData \
+            -only-testing:T3NativeUITests/NativeFlowTests/testUpstreamThemeVariantsWithPreviewData test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-ios-test-results
+          path: apps/ios-native/build/*.xcresult
+          if-no-files-found: ignore
